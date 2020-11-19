@@ -144,17 +144,6 @@ deploy - factored
 injSeverity - factored (likley not to be used)
 
 
-## (WIP - not interesting. Need frequency plot)
-
-```{r}
-ggplot(data, aes(x=dvcat,
-                 y = dead,
-                 color = seatbelt)) +
-  geom_point() +
-  geom_smooth(method = 'lm', se=FALSE)
-
-```
-
 
 ## Exploratory regression analysis
 
@@ -203,9 +192,44 @@ Alternative: Significant and cannot remove from model
 Test statistic is more extreme than critical value. Cannot remove it.
 
 
+## Goodness of Fit - Deviance
+(Review Module 9 Hypothesis Test)
+Deviance follows chi-squared distribution with n-p degrees of freedom (p = parameters in model)
+
+Small deviance (large P values) indicate model provides satisfactory fit. Rule of thumb - compare deviance to degrees of freedom. 
+If much larger than one -> model not a good fit
+
+```{r}
+model_expl$deviance #Model Deviance
+model_expl$df.residual #Degrees of Freedom
+
+#Compare model deviance to degrees of freedom. Small deviance indicates satisfactory fit. If much larger than one model not a good fit
+model_expl$deviance/model_expl$df.residual
+
+```
+Note: model provides satisfactory fit given significantly <1
+This assumes that data is grouped (or can be treated as such)
+
+## Goodness of Fit - Peason Chi-Squared
+Compare to Chi-Squared distribution with n-p degrees of freedom
+Null: Data supports the model
+Alternative: Data does not support the model
+
+
+```{r}
+#Hypothesis Test (review Module 9 for certainty)
+pearson<-residuals(model_expl, type="pearson")
+X2<-sum(pearson^2)
+X2
+1-pchisq(X2, model_expl$df.residual)
+
+#Divide by the number of degrees of freedom, and compare to one (much larger = not good fit)
+X2/model_expl$df.residual
+```
+
 NEXT:
-Goodness of Fit - Deviance, Pearson Square (show data can be thought of as "grouped")
 Module 10 - ROC Curve, etc. (test vs train data)
+
 
 ## Validation
 
@@ -251,31 +275,13 @@ Top Row - y_hat
 
 
 
+Note: Test statistic / degrees of freedom < 1. This suggests a good fit.
+Hypothesis test suggests it is a good fit (review Module 9 for certainty)
+
 ```{r}
-##predicted survival rate for testing data based on training data
-preds<-predict(result,newdata=test, type="response")
-
-##produce the numbers associated with classification table
-rates<-prediction(preds, test$Survived)
-
-##store the true positive and false postive rates
-roc_result<-performance(rates,measure="tpr", x.measure="fpr")
-
-##plot ROC curve and overlay the diagonal line for random guessing
-plot(roc_result, main="ROC Curve for Titanic")
-lines(x = c(0,1), y = c(0,1), col="red")
-
-##compute the AUC
-auc<-performance(rates, measure = "auc")
-auc
-
-##confusion matrix. Actual values in the rows, predicted classification in cols
-table(test$Survived, preds>0.5)
-
-table(test$Survived, preds>0.7)
-
+pearson<-residuals(result2,type="pearson")
+X2<-sum(pearson^2)
+X2
+1-pchisq(X2,9-2)
 ```
-
-
-
 
