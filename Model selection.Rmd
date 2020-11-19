@@ -1,0 +1,78 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Cmd+Shift+Enter*. 
+
+```{r}
+# read csv file, and remove column 1 and 16, which is index column and ID
+# column 1, index
+# column 16, case ID
+nass <- read.csv("nassCDS.csv", header = T)[,c(-1, -16)]
+
+lengths(nass)
+# check if there's NA in nass
+which(is.na(nass), arr.ind=TRUE)
+
+
+```
+
+
+```{r}
+#remove rows containing NA
+nass <- nass[complete.cases(nass), ]
+lengths(nass)
+```
+
+```{r}
+#convert categorical to factor
+nass$dead<-factor(nass$dead) 
+nass$dvcat<-factor(nass$dvcat)
+nass$airbag<-factor(nass$airbag)
+nass$seatbelt<-factor(nass$seatbelt)
+nass$sex<-factor(nass$sex)
+nass$abcat<-factor(nass$abcat)
+nass$occRole<-factor(nass$occRole)
+nass$deploy<-factor(nass$deploy)
+
+nass$y <- nass$dead
+levels(nass$y) <- c(0,1)
+
+
+# drop column, weight, and injseverity
+drops <- c("weight","injSeverity","dead")
+nass=nass[ , !(names(nass) %in% drops)]
+nass
+
+```
+```{r}
+#creating training and testing dataset
+set.seed(139)
+sample<-sample.int(nrow(nass), floor(.10*nrow(nass)), replace = F)
+train<-nass[sample, ]
+test<-nass[-sample, ]
+```
+
+
+
+
+
+```{r}
+fullmod <- glm(y ~. , data = train, family = "binomial" ,maxit = 100)
+summary(fullmod)
+```
+```{r}
+Nullmod <- glm(y~1, data = train, family = "binomial")
+summary(Nullmod)
+```
+```{r}
+step(fullmod, scope=list(lower=Nullmod, upper=fullmod), direction="backward")
+```
+
+```{r}
+step(fullmod, scope=list(lower=Nullmod, upper=fullmod), direction="both")
+```
+
