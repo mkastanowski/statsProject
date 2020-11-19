@@ -227,8 +227,14 @@ X2
 X2/model_expl$df.residual
 ```
 
+Note: Test statistic / degrees of freedom < 1. This suggests a good fit.
+Hypothesis test suggests it is a good fit (review Module 9 for certainty)
+
+
+
 NEXT:
 Module 10 - ROC Curve, etc. (test vs train data)
+
 
 
 ## Validation
@@ -275,13 +281,9 @@ Top Row - y_hat
 
 
 
-Note: Test statistic / degrees of freedom < 1. This suggests a good fit.
-Hypothesis test suggests it is a good fit (review Module 9 for certainty)
+
 
 ```{r}
-pearson<-residuals(result2,type="pearson")
-X2<-sum(pearson^2)
-X2
-1-pchisq(X2,9-2)
+
 ```
 
