@@ -1,0 +1,281 @@
+---
+title: "Project 02 - 01"
+author: "John Leraas"
+date: "11/15/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(dplyr)
+library(ggplot2)
+library(MASS)
+library(ROCR) #ROC Curve
+```
+
+## Import Data
+
+```{r}
+data <- read.csv('nassCDS.csv', header = TRUE)
+attach(data)
+```
+
+## Factor Priority Variables
+- dead
+- dvcat
+- seatbelt
+- airbag
+- frontal
+
+### Factor 'dead'
+Want alive = 0, dead = 1
+
+```{r}
+#Factor dead
+dead <- factor(dead)
+is.factor(dead)
+dead<-relevel(dead, ref = "alive") 
+levels(dead)
+contrasts(dead)
+
+#'convert' dead to numeric
+dead_num<-dead
+levels(dead_num)<-c(0,1)
+data$dead_num <- dead_num
+
+
+```
+### Factor dvcat (speed of crash)
+
+```{r}
+dvcat <- factor(dvcat)
+is.factor(dvcat)
+levels(dvcat)
+contrasts(dvcat)
+```
+### Factor seatbelt
+Unbelted = 1
+Belted = 0
+```{r}
+seatbelt <- factor(seatbelt)
+is.factor(seatbelt)
+levels(seatbelt)
+contrasts(seatbelt)
+```
+
+### Factor airbag
+none = 1
+airbag = 0
+```{r}
+airbag <- factor(airbag)
+is.factor(airbag)
+levels(airbag)
+contrasts(airbag)
+```
+
+### Factor Frontal
+frontal impact = 1
+non-frontal = 0
+```{r}
+frontal <- factor(frontal)
+is.factor(frontal)
+levels(frontal)
+contrasts(frontal)
+```
+
+## Summary Tables
+
+```{r}
+table(data$dead, data$seatbelt)
+
+table(data$dead, data$dvcat)
+
+table(data$dead, data$airbag)
+
+print("Frontal:")
+table(data$dead, data$frontal)
+```
+
+Seatbelt - unbelted more dangerous
+Airbag - none is more dangerous
+Speed (dvcat) - faster more dangerous
+Frontal - non-frontal is more dangerous
+
+Speed seems to be one of the more important factors
+
+
+## Factor Other Variables
+-sex
+-occRole
+-deploy
+-injSeverity (not likely to be used)
+
+```{r}
+sex <- factor(sex)
+contrasts(sex)
+
+occRole <- factor(occRole)
+contrasts(occRole)
+
+deploy <- factor(deploy)
+contrasts(deploy)
+
+injSeverity <- factor(injSeverity)
+contrasts(injSeverity)
+
+```
+
+Note: At this point all appropriate variables have been factored. A status summary is below:
+
+dvcat - factored
+weight - not used
+dead - factored
+airbag - factored
+seatbelt - factored
+frontal - factored
+sex - factored
+ageOFocc - number
+yearacc - number
+yearVeh - number
+abcat - not used (at this point)
+occRole - factored
+deploy - factored
+injSeverity - factored (likley not to be used)
+
+
+## (WIP - not interesting. Need frequency plot)
+
+```{r}
+ggplot(data, aes(x=dvcat,
+                 y = dead,
+                 color = seatbelt)) +
+  geom_point() +
+  geom_smooth(method = 'lm', se=FALSE)
+
+```
+
+
+## Exploratory regression analysis
+
+```{r}
+#Exploratory Model
+model_expl <- glm(dead_num~dvcat+airbag+seatbelt+frontal, data = data, family = "binomial")
+summary(model_expl)
+
+#Null Model
+model_null <- glm(dead_num~1, "binomial")
+
+```
+Note: 
+-- p-values generally small, except: (i) dvcat10-24 (can likely group it with dvcat 9km/h or less), (ii) airbag (still fairly small... probably significant - potential gray area)
+
+
+Next step:
+Delta G^2 Test: see if it is useful
+Potential Wald test on airbag, maybe dvcat10-24
+Goodness of fit tests
+
+
+## Delta G ^ 2
+7 coefficients. 
+```{r}
+1-pchisq(model_null$deviance-model_expl$deviance, 7)
+
+#Just to check
+1-pchisq(9624.2-7390.2, 7)
+model_null$deviance-model_expl$deviance
+
+```
+Delta G^2 conclusion: The model is useful
+
+
+## Wald Test on airbag
+Wald test: Z = B_j - 0 / se(B_j)
+Normal Distribution
+```{r}
+z_airbag <- 0.13785 / 0.06605
+z_airbag
+qnorm(0.975)
+```
+Null: Coefficient is zero, and you can remove.
+Alternative: Significant and cannot remove from model
+Test statistic is more extreme than critical value. Cannot remove it.
+
+
+NEXT:
+Goodness of Fit - Deviance, Pearson Square (show data can be thought of as "grouped")
+Module 10 - ROC Curve, etc. (test vs train data)
+
+## Validation
+
+```{r}
+# Assign Training and Test data
+set.seed(139)
+sample<-sample.int(nrow(data), floor(.50*nrow(data)), replace = F)
+train<-data[sample, ]
+test<-data[-sample, ]
+
+#Fit regression
+model_test <- glm(dead_num~dvcat+airbag+seatbelt+frontal, data = train, family = "binomial")
+
+preds<-predict(model_test,newdata=test, type="response")
+#preds[is.na(preds)]<-0
+
+rates<-prediction(preds, test$dead_num)
+
+roc_result<-performance(rates,measure="tpr", x.measure="fpr")
+
+plot(roc_result, main="ROC Curve for Exploratory Model")
+lines(x = c(0,1), y = c(0,1), col="red")
+
+```
+
+```{r}
+##compute the AUC
+aucvalues <- performance(rates, measure = "auc")
+auc <- aucvalues@y.values[[1]]
+auc
+
+##confusion matrix. Actual values in the rows, predicted classification in cols
+table(test$dead_num, preds>0.1)
+table(test$dead_num, preds>0.25)
+table(test$dead_num, preds>0.5)
+table(test$dead_num, preds>0.75)
+
+```
+Left Column - y
+Top Row - y_hat
+0.75: No deaths predicted
+0.25: When death occurred: ~2x false positives to actual positives
+
+
+
+```{r}
+##predicted survival rate for testing data based on training data
+preds<-predict(result,newdata=test, type="response")
+
+##produce the numbers associated with classification table
+rates<-prediction(preds, test$Survived)
+
+##store the true positive and false postive rates
+roc_result<-performance(rates,measure="tpr", x.measure="fpr")
+
+##plot ROC curve and overlay the diagonal line for random guessing
+plot(roc_result, main="ROC Curve for Titanic")
+lines(x = c(0,1), y = c(0,1), col="red")
+
+##compute the AUC
+auc<-performance(rates, measure = "auc")
+auc
+
+##confusion matrix. Actual values in the rows, predicted classification in cols
+table(test$Survived, preds>0.5)
+
+table(test$Survived, preds>0.7)
+
+```
+
+
+
+
