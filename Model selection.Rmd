@@ -51,7 +51,7 @@ nass
 ```{r}
 #creating training and testing dataset
 set.seed(139)
-sample<-sample.int(nrow(nass), floor(.10*nrow(nass)), replace = F)
+sample<-sample.int(nrow(nass), floor(.50*nrow(nass)), replace = F)
 train<-nass[sample, ]
 test<-nass[-sample, ]
 ```
@@ -75,4 +75,21 @@ step(fullmod, scope=list(lower=Nullmod, upper=fullmod), direction="backward")
 ```{r}
 step(fullmod, scope=list(lower=Nullmod, upper=fullmod), direction="both")
 ```
+```{r}
+result <- glm(formula = y ~ dvcat + seatbelt + frontal + ageOFocc, family = "binomial", 
+    data = train, maxit = 100)
+
+summary(result)
+```
+```{r}
+vif(result)
+```
+
+```{r}
+residuals <- residuals(result)
+acf(residuals, type = "partial")
+acf(residuals)
+```
+
+
 
