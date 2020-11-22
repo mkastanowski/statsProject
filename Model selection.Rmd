@@ -42,8 +42,8 @@ nass$y <- nass$dead
 levels(nass$y) <- c(0,1)
 
 
-# drop column, weight, and injseverity
-drops <- c("weight","injSeverity","dead")
+# drop column, weight, and injseverity and abcat
+drops <- c("weight","injSeverity","dead", "abcat")
 nass=nass[ , !(names(nass) %in% drops)]
 nass
 
@@ -76,12 +76,13 @@ step(fullmod, scope=list(lower=Nullmod, upper=fullmod), direction="backward")
 step(fullmod, scope=list(lower=Nullmod, upper=fullmod), direction="both")
 ```
 ```{r}
-result <- glm(formula = y ~ dvcat + seatbelt + frontal + ageOFocc, family = "binomial", 
-    data = train, maxit = 100)
+result <- glm(formula = y ~ dvcat + airbag + seatbelt + frontal + ageOFocc + 
+    occRole + deploy, family = "binomial", data = train, maxit = 100)
 
 summary(result)
 ```
 ```{r}
+library(faraway)
 vif(result)
 ```
 
@@ -90,6 +91,153 @@ residuals <- residuals(result)
 acf(residuals, type = "partial")
 acf(residuals)
 ```
+```{r}
+#full Model
+model_full <- glm(formula = y ~ dvcat + airbag + seatbelt + frontal + ageOFocc + 
+    occRole + deploy, family = "binomial", data = train, maxit = 100)
+summary(model_full)
+
+#Null Model
+model_null <- glm(y~1, data=train, "binomial", maxit = 100)
+summary(model_null)
+```
+## Delta G ^ 2
+10 coefficients. 
+```{r}
+1-pchisq(model_null$deviance-model_full$deviance, 10)
+
+```
+## Validation
+
+```{r}
+library(ROCR)
+# Assign Training and Test data
+
+#Fit regression
+
+
+preds<-predict(model_full,newdata=test, type="response")
+#preds[is.na(preds)]<-0
+
+rates<-prediction(preds, test$y)
+
+roc_result<-performance(rates,measure="tpr", x.measure="fpr")
+
+plot(roc_result, main="ROC Curve for Exploratory Model")
+lines(x = c(0,1), y = c(0,1), col="red")
+
+```
+```{r}
+##compute the AUC
+aucvalues <- performance(rates, measure = "auc")
+auc <- aucvalues@y.values[[1]]
+auc
+
+##confusion matrix. Actual values in the rows, predicted classification in cols
+table(test$y, preds>0.1)
+table(test$y, preds>0.25)
+table(test$y, preds>0.5)
+table(test$y, preds>0.75)
+
+```
+
+```{r}
+contrasts(train$dvcat)
+```
+```{r}
+library(multcomp)
+# pairwise
+attach(data)
+pairwise<-glht(model_full, linfct = mcp(dvcat= "Tukey"))
+summary(pairwise)
+detach(data)
+```
+```{r}
+nass$New_dvcat=nass$dvcat
+levels(nass$New_dvcat)<-c(levels(nass$New_dvcat),"1-39")
+nass$New_dvcat[nass$dvcat=="1-9km/h"]<-"1-39"
+nass$New_dvcat[nass$dvcat=="10-24"]<-"1-39"
+nass$New_dvcat[nass$dvcat=="25-39"]<-"1-39"
+
+
+nass$New_dvcat <- droplevels(nass$New_dvcat)
+levels(nass$New_dvcat)
+nass$New_dvcat<- relevel(nass$New_dvcat, ref = "1-39")
+```
+
+```{r}
+#creating training and testing dataset
+set.seed(139)
+sample<-sample.int(nrow(nass), floor(.50*nrow(nass)), replace = F)
+train<-nass[sample, ]
+test<-nass[-sample, ]
+
+
+#full Model
+model_full <- glm(formula = y ~ New_dvcat + airbag + seatbelt + frontal + ageOFocc + 
+    occRole + deploy, family = "binomial", data = train, maxit = 100)
+summary(model_full)
+
+#Null Model
+model_null <- glm(y~1, data=train, "binomial", maxit = 100)
+summary(model_null)
+
+library(ROCR)
+# Assign Training and Test data
+
+#Fit regression
+#model_test <- glm(dead_num~dvcat+airbag+seatbelt+frontal, data = train, family = "binomial")
+
+preds<-predict(model_full,newdata=test, type="response")
+#preds[is.na(preds)]<-0
+
+rates<-prediction(preds, test$y)
+
+roc_result<-performance(rates,measure="tpr", x.measure="fpr")
+
+plot(roc_result, main="ROC Curve for Exploratory Model")
+lines(x = c(0,1), y = c(0,1), col="red")
+
+##compute the AUC
+aucvalues <- performance(rates, measure = "auc")
+auc <- aucvalues@y.values[[1]]
+auc
+
+##confusion matrix. Actual values in the rows, predicted classification in cols
+table(test$y, preds>0.1)
+table(test$y, preds>0.25)
+table(test$y, preds>0.5)
+table(test$y, preds>0.75)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
