@@ -7,16 +7,21 @@ output: html_document
 
 ```{r}
 library(dplyr)
+library(ggplot2)
+library(MASS)
+library(ROCR) #ROC Curve
 library(nnet)
-library(ROCR)
 ```
 
 
 ```{r}
 setwd("~/Desktop/STAT Project")
 nass<-read.csv("nassCDS.csv",header=TRUE)
-nass
+
 attach(nass)
+#which(is.na(nass), arr.ind=TRUE)
+
+nass
 ```
 
 ```{r}
@@ -47,9 +52,34 @@ nass$dead_num <- dead_num
 ```{r}
 #multinomial regression
 
-result<-glm(dead_num~ageOFocc+yearVeh+injSeverity+as.numeric(weight)+seatbelt+airbag+deploy+occRole+sex, data = nass, family ="binomial")
+#result<-glm(dead_num~dvcat+ageOFocc+yearVeh+frontal+injSeverity+as.numeric(weight)+seatbelt+airbag+deploy+occRole+sex, data = nass, family ="binomial")
 
-summary(result)
+model_expl <- glm(dead_num~dvcat+deploy+seatbelt+frontal+ageOFocc+occRole+yearVeh, data = nass, family = "binomial")
+
+model_null <- glm(dead_num~1, "binomial")
+```
+```{r}
+#G Test and Walds Test
+model_multi <- multinom(dead_num~dvcat+seatbelt+deploy+frontal+ageOFocc+occRole+yearVeh)
+
+#Delta G test
+1-pchisq(model_null$deviance-model_expl$deviance, 7)
+
+#Wald Statistics 
+
+z<-summary(model_multi)$coefficients/summary(model_multi)$standard.errors
+z
+
+##compute corresponding p-values
+p<-(1 - pnorm(abs(z)))*2
+p
+```
+Deploy is above .05, drop Deploy from model.
+
+```{r}
+#new exploratory Model
+model_expl <- glm(dead_num~dvcat+seatbelt+frontal+ageOFocc+occRole+yearVeh, data = nass, family = "binomial")
+summary(model_expl)
 ```
 
 ```{r}
@@ -58,10 +88,10 @@ set.seed(139)
 sample<-sample.int(nrow(nass), floor(.50*nrow(nass)), replace = F)
 train<-nass[sample, ]
 test<-nass[-sample, ]
-preds<-predict(result,newdata=test, type="response")
+preds<-predict(model_expl,newdata=test, type="response")
 preds[is.na(preds)]<-0
 rates<-prediction(preds, test$dead_num)
-roc_result<-performance(rate,measure="tpr", x.measure="fpr")
+roc_result<-performance(rates,measure="tpr", x.measure="fpr")
 plot(roc_result, main="ROC Curve for nass")
 lines(x = c(0,1), y = c(0,1), col="red")
 
@@ -69,8 +99,37 @@ aucvalues <- performance(rates, measure = "auc")
 auc <- aucvalues@y.values[[1]]
 auc
 
-table(test$dead_num, preds>0.5)
-table(test$dead_num, preds>0.1)
+
 ```
 
-AUC is 0.9822028, model is highly predictive
+AUC is 0.8846257, model is highly predictive
+```{r}
+#Confusion Matrices
+table(test$dead_num, preds>0.1)
+#table(test$dead_num, preds>0.25)
+table(test$dead_num, preds>0.5)
+#table(test$dead_num, preds>0.75)
+```
+For Threshold of 0.1
+
+False Positive Rate: 1188/12478 = 0.09520757
+
+True Positive Rate: 409/631 = 0.6481775
+
+Overall Error Rate: (222+1188)/12478 =0.1129989
+
+
+
+For Threshold of 0.5
+
+False Positive rate: 42/12478 = 0.003365924
+
+True Positive Rate: 59/631 =0.09350238
+
+Overall Error Rate: (572+42)/12478 = 0.0492066
+
+
+
+All p values less than .05 except for deploy(drop deploy)
+
+
