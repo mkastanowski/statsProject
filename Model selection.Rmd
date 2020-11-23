@@ -8,16 +8,27 @@ This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute
 Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Cmd+Shift+Enter*. 
 
 ```{r}
+
+#libraries
+library(faraway)
+library(multcomp)
+
 # read csv file, and remove column 1 and 16, which is index column and ID
-# column 1, index
-# column 16, case ID
-nass <- read.csv("nassCDS.csv", header = T)[,c(-1, -16)]
+nass <- read.csv("nassCDS.csv", header = T)
 
 lengths(nass)
 # check if there's NA in nass
+
+# drop column, X, and caseid
+nass=subset( nass, select = -c(X,caseid))
+lengths(nass)
+
+#which(is.na(nass), arr.ind=TRUE)
+# drop column, weight, and injseverity
+nass=subset(nass, select = -c(weight, injSeverity))
+
 which(is.na(nass), arr.ind=TRUE)
-
-
+lengths(nass)
 ```
 
 
@@ -37,35 +48,26 @@ nass$sex<-factor(nass$sex)
 nass$abcat<-factor(nass$abcat)
 nass$occRole<-factor(nass$occRole)
 nass$deploy<-factor(nass$deploy)
+nass$abcat<-factor(nass$abcat)
 
-nass$y <- nass$dead
-levels(nass$y) <- c(0,1)
+nass$dead_num <- nass$dead
+levels(nass$dead_num) <- c(0,1)
+
+#remove column of dead
+nass=subset(nass, select = -c(dead))
+head(nass, 5)
 
 
-# drop column, weight, and injseverity and abcat
-drops <- c("weight","injSeverity","dead", "abcat")
-nass=nass[ , !(names(nass) %in% drops)]
-nass
-
-```
-```{r}
-#creating training and testing dataset
-set.seed(139)
-sample<-sample.int(nrow(nass), floor(.50*nrow(nass)), replace = F)
-train<-nass[sample, ]
-test<-nass[-sample, ]
 ```
 
 
-
-
-
 ```{r}
-fullmod <- glm(y ~. , data = train, family = "binomial" ,maxit = 100)
+fullmod <- glm(dead_num ~. , data = nass, family = "binomial" ,maxit = 100)
 summary(fullmod)
+vif(fullmod)
 ```
 ```{r}
-Nullmod <- glm(y~1, data = train, family = "binomial")
+Nullmod <- glm(dead_num~1, data = nass, family = "binomial")
 summary(Nullmod)
 ```
 ```{r}
@@ -76,37 +78,93 @@ step(fullmod, scope=list(lower=Nullmod, upper=fullmod), direction="backward")
 step(fullmod, scope=list(lower=Nullmod, upper=fullmod), direction="both")
 ```
 ```{r}
-result <- glm(formula = y ~ dvcat + airbag + seatbelt + frontal + ageOFocc + 
-    occRole + deploy, family = "binomial", data = train, maxit = 100)
+# final model??
+# 
 
-summary(result)
+model_picked <- glm(formula = dead_num ~ dvcat + seatbelt + frontal + sex + ageOFocc + 
+    abcat + occRole, family = "binomial", data = nass, maxit = 100)
+summary(model_picked)
+
+vif(model_picked)
 ```
-```{r}
-library(faraway)
-vif(result)
-```
+Vif are huge. need to lower multicollinearity???
 
 ```{r}
 residuals <- residuals(result)
 acf(residuals, type = "partial")
 acf(residuals)
 ```
-```{r}
-#full Model
-model_full <- glm(formula = y ~ dvcat + airbag + seatbelt + frontal + ageOFocc + 
-    occRole + deploy, family = "binomial", data = train, maxit = 100)
-summary(model_full)
 
-#Null Model
-model_null <- glm(y~1, data=train, "binomial", maxit = 100)
-summary(model_null)
-```
-## Delta G ^ 2
-10 coefficients. 
+ Delta G ^ 2
+11 coefficients. 
 ```{r}
-1-pchisq(model_null$deviance-model_full$deviance, 10)
+1-pchisq(Nullmod$deviance-model_picked$deviance, 11)
 
 ```
+```{r}
+summary(model_picked)
+vif(model_picked)
+contrasts(nass$dvcat)
+contrasts(nass$abcat)
+```
+```{r}
+attach(nass)
+pairwise<-glht(model_picked, linfct = mcp( dvcat= "Tukey"))
+summary(pairwise)
+
+pairwise<-glht(model_picked, linfct = mcp( abcat= "Tukey"))
+summary(pairwise)
+
+detach(nass)
+```
+## note, unavail is no different from deploy
+
+
+
+```{r}
+# combine categories
+nass$New_dvcat=nass$dvcat
+levels(nass$New_dvcat)<-c(levels(nass$New_dvcat),"1-39")
+nass$New_dvcat[nass$dvcat=="1-9km/h"]<-"1-39"
+nass$New_dvcat[nass$dvcat=="10-24"]<-"1-39"
+nass$New_dvcat[nass$dvcat=="25-39"]<-"1-39"
+
+
+nass$New_dvcat <- droplevels(nass$New_dvcat)
+levels(nass$New_dvcat)
+nass$New_dvcat<- relevel(nass$New_dvcat, ref = "1-39")
+levels(nass$New_dvcat)
+
+model_picked <- glm(formula = dead_num ~ New_dvcat + seatbelt + frontal + sex + ageOFocc + 
+    abcat + occRole, family = "binomial", data = nass, maxit = 100)
+summary(model_picked)
+
+vif(model_picked)
+
+```
+
+
+
+
+
+
+```{r}
+nass$New_abcat=nass$abcat
+levels(nass$New_abcat)<-c(levels(nass$New_abcat),"unavail_deploy")
+nass$New_abcat[nass$abcat=="deploy"]<-"unavail_deploy"
+nass$New_abcat[nass$abcat=="unavail"]<-"unavail_deploy"
+
+nass$New_abcat <- droplevels(nass$New_abcat)
+levels(nass$New_abcat)
+levels(nass$New_abcat)
+
+model_picked <- glm(formula = dead_num ~ New_dvcat + seatbelt + frontal + sex + ageOFocc + 
+    New_abcat + occRole, family = "binomial", data = nass, maxit = 100)
+summary(model_picked)
+
+vif(model_picked)
+```
+
 ## Validation
 
 ```{r}
@@ -142,30 +200,6 @@ table(test$y, preds>0.75)
 ```
 
 ```{r}
-contrasts(train$dvcat)
-```
-```{r}
-library(multcomp)
-# pairwise
-attach(data)
-pairwise<-glht(model_full, linfct = mcp(dvcat= "Tukey"))
-summary(pairwise)
-detach(data)
-```
-```{r}
-nass$New_dvcat=nass$dvcat
-levels(nass$New_dvcat)<-c(levels(nass$New_dvcat),"1-39")
-nass$New_dvcat[nass$dvcat=="1-9km/h"]<-"1-39"
-nass$New_dvcat[nass$dvcat=="10-24"]<-"1-39"
-nass$New_dvcat[nass$dvcat=="25-39"]<-"1-39"
-
-
-nass$New_dvcat <- droplevels(nass$New_dvcat)
-levels(nass$New_dvcat)
-nass$New_dvcat<- relevel(nass$New_dvcat, ref = "1-39")
-```
-
-```{r}
 #creating training and testing dataset
 set.seed(139)
 sample<-sample.int(nrow(nass), floor(.50*nrow(nass)), replace = F)
@@ -174,8 +208,8 @@ test<-nass[-sample, ]
 
 
 #full Model
-model_full <- glm(formula = y ~ New_dvcat + airbag + seatbelt + frontal + ageOFocc + 
-    occRole + deploy, family = "binomial", data = train, maxit = 100)
+model_full <- glm(formula = y ~ New_dvcat + seatbelt+ frontal + ageOFocc + New_abcat + 
+    occRole, family = "binomial", data = train, maxit = 100)
 summary(model_full)
 
 #Null Model
@@ -183,6 +217,7 @@ model_null <- glm(y~1, data=train, "binomial", maxit = 100)
 summary(model_null)
 
 library(ROCR)
+vif(model_full)
 # Assign Training and Test data
 
 #Fit regression
