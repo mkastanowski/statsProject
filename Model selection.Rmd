@@ -12,7 +12,7 @@ Try executing this chunk by clicking the *Run* button within the chunk or by pla
 #libraries
 library(faraway)
 library(multcomp)
-
+library(car)
 # read csv file, and remove column 1 and 16, which is index column and ID
 nass <- read.csv("nassCDS.csv", header = T)
 
@@ -64,7 +64,8 @@ head(nass, 5)
 ```{r}
 fullmod <- glm(dead_num ~. , data = nass, family = "binomial" ,maxit = 100)
 summary(fullmod)
-vif(fullmod)
+faraway::vif(fullmod)
+car::vif(fullmod)
 ```
 ```{r}
 Nullmod <- glm(dead_num~1, data = nass, family = "binomial")
@@ -75,25 +76,58 @@ step(fullmod, scope=list(lower=Nullmod, upper=fullmod), direction="backward")
 ```
 
 ```{r}
-step(fullmod, scope=list(lower=Nullmod, upper=fullmod), direction="both")
+step(Nullmod, scope=list(lower=Nullmod, upper=fullmod), direction="both")
 ```
+```{r}
+# forward selection
+step(Nullmod, scope=list(lower=Nullmod, upper=fullmod), direction="forward")
+```
+
+
+
+
 ```{r}
 # final model??
 # 
 
-model_picked <- glm(formula = dead_num ~ dvcat + seatbelt + frontal + sex + ageOFocc + 
-    abcat + occRole, family = "binomial", data = nass, maxit = 100)
+model_picked <- glm(formula = dead_num ~ dvcat + ageOFocc + frontal + seatbelt + 
+    abcat + occRole + sex, family = "binomial", data = nass, maxit = 100)
 summary(model_picked)
 
-vif(model_picked)
+faraway::vif(model_picked)
+car::vif(model_picked)
 ```
-Vif are huge. need to lower multicollinearity???
+GVIF looks good. 
 
 ```{r}
-residuals <- residuals(result)
-acf(residuals, type = "partial")
-acf(residuals)
+# influential points check
+#
+n<-nrow(nass)
+p<-9
+print("cooks")
+COOKS<-cooks.distance(model_picked)
+COOKS[COOKS>qf(0.5,p,n-p)]
+
+print("DFFITS")
+DFFITS<-dffits(model_picked)
+DFFITS[abs(DFFITS)>2*sqrt(p/n)]
+print('DFBETAS')
+DFBETAS<-dfbetas(model_picked)
+DFBETAS[abs(DFBETAS)>2/sqrt(n)]
+
+par(mfrow=c(1,2))
+dffits.ep <- dffits(model_picked)
+plot(seq(1, length(dffits.ep), 1),dffits.ep,type="l", main="DFFITS Plot",
+       xlab="Index", ylab="Dffits")
+abline(h=2*sqrt(p/n), col="red")
+abline(h=-2*sqrt(p/n), col="red")
+
+cook.ep <- cooks.distance(model_picked)
+plot(seq(1, length(cook.ep), 1),cook.ep,type="l", main="Cook's Distance",
+       xlab="Index", ylab="Cook's Distance", ylim=c(0,1))
+abline(h=qf(0.5,p,n-p), col="red")
 ```
+
 
  Delta G ^ 2
 11 coefficients. 
@@ -164,6 +198,10 @@ summary(model_picked)
 
 vif(model_picked)
 ```
+
+
+
+
 
 ## Validation
 
