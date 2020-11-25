@@ -11,6 +11,13 @@ library(ggplot2)
 library(MASS)
 library(ROCR) #ROC Curve
 library(nnet)
+library(leaps)
+library(faraway)
+library(car)
+library(glmnet)
+library(boot)
+library(caret) 
+library(tidyverse) 
 ```
 
 
@@ -26,26 +33,42 @@ nass
 
 ```{r}
 #convert categorical to factor
-dead<-factor(dead) 
-dvcat<-factor(dvcat)
-airbag<-factor(airbag)
-seatbelt<-factor(seatbelt)
-sex<-factor(sex)
-abcat<-factor(abcat)
-occRole<-factor(occRole)
+nass$dead<-factor(nass$dead) 
+nass$dvcat<-factor(nass$dvcat)
+nass$airbag<-factor(nass$airbag)
+nass$abcat<-factor(nass$abcat)
+nass$seatbelt<-factor(nass$seatbelt)
+nass$sex<-factor(nass$sex)
+nass$abcat<-factor(nass$abcat)
+nass$occRole<-factor(nass$occRole)
 
 
 #reset reference class
-seatbelt<-relevel(seatbelt, ref = "none")
-airbag<-relevel(airbag, ref ="none")
+nass$seatbelt<-relevel(nass$seatbelt, ref = "none")
+nass$airbag<-relevel(nass$airbag, ref ="none")
 ```
 
 ```{r}
 #'convert' dead to numeric
-dead_num<-dead
+dead_num<-nass$dead
 levels(dead_num)<-c(0,1)
 nass$dead_num <- dead_num
 
+```
+```{r}
+#model selection
+set.seed(139)
+sample<-sample.int(nrow(nass), floor(.50*nrow(nass)), replace = F)
+train<-nass[sample, ]
+test<-nass[-sample, ]
+
+#null model
+#regnull <- glm(dead_num~1, data=train, family = "binomial")
+##model with all predictors
+#regfull <- glm(dead_num~., data=train, family = "binomial")
+
+#step(regfull, scope=list(lower=Nullmod, upper=fullmod), direction="backward")
+#step(regfull scope=list(lower=Nullmod, upper=fullmod), direction="both")
 ```
 
 
@@ -54,20 +77,21 @@ nass$dead_num <- dead_num
 
 #result<-glm(dead_num~dvcat+ageOFocc+yearVeh+frontal+injSeverity+as.numeric(weight)+seatbelt+airbag+deploy+occRole+sex, data = nass, family ="binomial")
 
-model_expl <- glm(dead_num~dvcat+deploy+seatbelt+frontal+ageOFocc+occRole+yearVeh, data = nass, family = "binomial")
+model_expl <- glm(dead_num~dvcat+abcat+seatbelt+frontal+ageOFocc+occRole+yearVeh, data = nass, family = "binomial")
 
 model_null <- glm(dead_num~1, "binomial")
 ```
 ```{r}
 #G Test and Walds Test
-model_multi <- multinom(dead_num~dvcat+seatbelt+deploy+frontal+ageOFocc+occRole+yearVeh)
+model_mult <- multinom(dead_num~dvcat+abcat+frontal+ageOFocc+occRole+yearVeh)
+
 
 #Delta G test
 1-pchisq(model_null$deviance-model_expl$deviance, 7)
 
 #Wald Statistics 
 
-z<-summary(model_multi)$coefficients/summary(model_multi)$standard.errors
+z<-summary(model_mult)$coefficients/summary(model_mult)$standard.errors
 z
 
 ##compute corresponding p-values
@@ -78,7 +102,7 @@ Deploy is above .05, drop Deploy from model.
 
 ```{r}
 #new exploratory Model
-model_expl <- glm(dead_num~dvcat+seatbelt+frontal+ageOFocc+occRole+yearVeh, data = nass, family = "binomial")
+model_expl <- glm(dead_num~dvcat+abcat+frontal+ageOFocc+occRole+yearVeh, data = nass, family = "binomial")
 summary(model_expl)
 ```
 
@@ -102,7 +126,7 @@ auc
 
 ```
 
-AUC is 0.8846257, model is highly predictive
+AUC is 0.8685021, model is highly predictive
 ```{r}
 #Confusion Matrices
 table(test$dead_num, preds>0.1)
@@ -131,5 +155,44 @@ Overall Error Rate: (572+42)/12478 = 0.0492066
 
 
 All p values less than .05 except for deploy(drop deploy)
+
+
+```{r}
+vif(model_expl)
+
+```
+```{r}
+set.seed(139)
+sub_sample_1<-sample.int(nrow(nass), floor(.05*nrow(nass)), replace = F)
+
+loocv_sample<-nass[sub_sample_1, ]
+LOOCV <- function(fit){
+  h <-lm.influence(fit)$h
+  mean((residuals(fit)/(1-h))^2)
+}
+```
+
+
+```{r}
+
+model_picked <- glm(formula = dead_num ~ dvcat + seatbelt + frontal + sex + ageOFocc + 
+    abcat + occRole, family = "binomial", data = loocv_sample, maxit = 100)
+
+cv.err<-cv.glm(loocv_sample, model_picked)
+#cv.err$delta[1] ##the output for the LOOCV should match your own
+cv.glm(loocv_sample, model_picked, K=5)$delta[1] ##k fold CV with k=10
+
+```
+
+```{r}
+# K-Fold Cross Validation on full model
+train_control <- trainControl(method = "cv", 
+                              number = 10)
+k_model <- train(dead_num ~ dvcat + seatbelt + frontal + sex + ageOFocc + 
+    abcat + occRole, data = nass,  
+               method = "glm", 
+               trControl = train_control) 
+print(k_model)
+```
 
 
