@@ -182,11 +182,23 @@ cv.glm(loocv_sample, model_picked, K=5)$delta[1] ##k fold CV with k=10
 # K-Fold Cross Validation on full model
 train_control <- trainControl(method = "cv", 
                               number = 10)
+train_control_r <- trainControl(method = "repeatedcv", 
+                              number = 10, repeats = 3)
+#k-fold
 k_model <- train(dead_num ~ dvcat + seatbelt + frontal + sex + ageOFocc + 
     abcat + occRole, data = nass,  
                method = "glm", 
                trControl = train_control) 
 print(k_model)
+
+
+#repeated_k fold
+kRep_model <- train(dead_num ~ dvcat + seatbelt + frontal + sex + ageOFocc + 
+    abcat + occRole, data = nass,  
+               method = "glm", 
+               trControl = train_control_r) 
+
+print(kRep_model)
 ```
 
 
