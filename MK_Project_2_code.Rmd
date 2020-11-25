@@ -161,20 +161,14 @@ All p values less than .05 except for deploy(drop deploy)
 vif(model_expl)
 
 ```
+
+
 ```{r}
+#LOOCV on sample of the model
 set.seed(139)
 sub_sample_1<-sample.int(nrow(nass), floor(.05*nrow(nass)), replace = F)
 
 loocv_sample<-nass[sub_sample_1, ]
-LOOCV <- function(fit){
-  h <-lm.influence(fit)$h
-  mean((residuals(fit)/(1-h))^2)
-}
-```
-
-
-```{r}
-
 model_picked <- glm(formula = dead_num ~ dvcat + seatbelt + frontal + sex + ageOFocc + 
     abcat + occRole, family = "binomial", data = loocv_sample, maxit = 100)
 
