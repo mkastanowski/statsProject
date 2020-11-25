@@ -6,8 +6,8 @@ output: html_document
 ---
 
 ```{r}
-install.packages("car")
-install.packages("ResourceSelection")
+#install.packages("car")
+#install.packages("ResourceSelection")
 ```
 
 ```{r setup, include=FALSE}
@@ -121,8 +121,13 @@ Stepwise Regression - Null Model
 ```{r}
 step(Nullmod, scope=list(lower=Nullmod, upper=fullmod), direction="both")
 ```
+TEST - Forward Selection
+```{r}
+step(glm(dead_num~yearVeh, data = nass, family = "binomial"), scope=list(lower=Nullmod, upper=fullmod), direction="forward")
+```
 
 
+TEST
 Stepwise Regression - Full Model
 Note: I just tried this to see if it resulted in a different model
 ```{r}
@@ -208,14 +213,15 @@ Result: Model is useful
 ## Outliers??
 
 ```{r}
+P <- 11
+N <- 26216
 COOKS<-cooks.distance(model_picked)
 COOKS[COOKS>qf(0.5,P,N-P)]
 
 ```
 
 ```{r}
-P <- 11
-N <- 26216
+
 DFFITS<-dffits(model_picked)
 DFFITS[abs(DFFITS)>2*sqrt(P/N)]
 
@@ -243,6 +249,7 @@ hl <- hoslem.test(nass$dead_num, predict(model_picked,data=nass, type="response"
 ```{r}
 #creating training and testing dataset
 set.seed(139)
+#set.seed(40)
 sample<-sample.int(nrow(nass), floor(.50*nrow(nass)), replace = F)
 train<-nass[sample, ]
 test<-nass[-sample, ]
@@ -269,6 +276,7 @@ roc_result<-performance(rates,measure="tpr", x.measure="fpr")
 plot(roc_result, main="ROC Curve for Exploratory Model")
 lines(x = c(0,1), y = c(0,1), col="red")
 
+summary(model_test)
 
 ```
 
@@ -290,4 +298,32 @@ table(test$dead_num, preds>0.5)
 table(test$dead_num, preds>0.75)
 ```
 
+```{r}
+library(glmnet)
+library(boot)
 
+##### Cross Validation for New Data Set Sampling ####
+set.seed(139)
+#set.seed(40)
+sample2<-sample.int(nrow(nass), floor(.5*nrow(nass)), replace = F)
+train2<-nass[sample2, ]
+test2<-nass[-sample2, ]
+
+#cv.glm(train2, glm(formula = dead_num ~ dvcat + seatbelt + frontal + sex + ageOFocc + abcat + occRole, family = "binomial", data = train2, maxit = 100), K=10)$delta[1] ##k fold CV with k=10
+
+##### Cross Validation on Old Data Set Sampling #####
+cv.glm(train, model_test, K=10)$delta[1] ##k fold CV with k=10
+
+```
+
+
+
+```{r}
+glm.fit<-glm(dead_num ~ dvcat + seatbelt + frontal + sex + ageOFocc + abcat + occRole, data=test)
+cv.err<-cv.glm(test, glm.fit)
+cv.err$delta[1] ##the output for the LOOCV should match your own
+cv.glm(data,glm.fit, K=10)$delta[1] ##k fold CV with k=10
+```
+
+model_test <- glm(formula = dead_num ~ dvcat + seatbelt + frontal + sex + ageOFocc + 
+    abcat + occRole, family = "binomial", data = train, maxit = 100)
