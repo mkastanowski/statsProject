@@ -17,13 +17,14 @@ library(leaps) #For All Regression
 
 # Data Cleaning
 
-## Import Data & Clean
+### Import Data & Clean
 
 - Load Data
 - Drop unwanted columns
 - Remove rows with "N/A" (only one exists after unwanted columns removed)
 
 Unwanted Columns:
+
 - X: just a number with no corresponding contextual information
 - caseid: just an identifier, not contextually relevant
 - weight: used in weighting of observations, not used in our model selection process
@@ -48,7 +49,7 @@ lengths(nass)
 
 ```
 
-## Convert categorical variables to factors
+### Convert categorical variables to factors
 
 - Ensure categorical variables are factored
 - Change "Dead" from ('alive', 'dead') to (0, 1)
@@ -85,7 +86,7 @@ head(nass, 5)
 
 # Model Selection - Exploration
 
-## Model Selection Exploration - Full Data Set
+### Model Selection Exploration - Full Data Set
 Define full and null models - used in Forward Selection, Backward Elimination, and Stepwise Regression
 ```{r}
 fullmod <- glm(dead_num ~. , data = nass, family = "binomial" ,maxit = 100)
@@ -206,6 +207,8 @@ step(Nullmod.train, scope=list(lower=Nullmod.train, upper=fullmod.train), direct
 Note: Each of the processes results in the same model
 
 
+Fit Model to training data
+Obtain Critical value for Wald Test
 ```{r}
 qnorm(0.975) #Critical value for Wald Test
 
@@ -217,8 +220,8 @@ summary(model_final)
 Note: Consistent with results from model based on full data set, we can combine dvcat10-24 with the reference class. In addition, it intuitively makes sense that differentiating speeds of accidents that are relatively slow may have little additional predictive power in identifying fatilities.
 
 
-### Combine appropriate accident speeds 
-Combine dvcat 10-24 with reference class. Call 1-25
+#### Combine appropriate accident speeds 
+Combine dvcat 10-24 with reference class. Rename to "1-25"
 
 ```{r}
 
@@ -234,10 +237,11 @@ levels(nass$New_dvcat)
 
 ```
 
-### Refit model based upon new categorization
+#### Refit model based upon new categorization
 ```{r}
+#Note - same sample seed is used for consistency (rather than combining categories for the Test Data set)
 #creating training and testing dataset
-set.seed(40) #Note - same sample seed is used for consistency (rather than combining categories for the Test Data set)
+set.seed(40) 
 sample<-sample.int(nrow(nass), floor(.50*nrow(nass)), replace = F)
 train<-nass[sample, ]
 test<-nass[-sample, ]
@@ -248,8 +252,66 @@ model_final <- glm(formula = dead_num ~ New_dvcat + seatbelt + frontal + sex + a
 summary(model_final)
 
 ```
+### Confusion Matrices
+Explore Confusion Matrices for various values of lambda
+```{r}
+## Confusion Matrices
+table(test$dead_num, preds>0.01)
+table(test$dead_num, preds>0.05)
+table(test$dead_num, preds>0.1)
+table(test$dead_num, preds>0.25)
+table(test$dead_num, preds>0.5)
+```
+
+Given use cases (first responders, insurance companies), are more concerned with correctly identifying deaths even at the cost of higher false positive rates.
+
+
 ### Model Validation
-ROC Curve
+
+#### Model Accuracy Details
+False Positive Rate (Type I Error Rate)
+False Negative Rate (Type II Error Rate)
+Overall Error Rate
+Sensitivity
+Specificity
+
+```{r}
+lam <- 0.05 #Selected value of lambda
+
+#Confusion Matrix
+t <- table(test$dead_num, preds>lam)
+t
+
+#Identify True Negatives, True Positives, False Negatives, False Positives
+n <- nrow(test) #Number observations
+TN <- t[1,1] #True Negatives
+FP <- t[1,2] #False Positives
+FN <- t[2,1] #False Negatives
+TP <- t[2,2] #True Positives
+
+#False Positive Rate (Type I Error Rate)
+FPR <- FP / (TN+FP)
+FPR
+
+#False Negative Rate (Type II Error Rate)
+FNR <- FN / (FN + TP)
+FNR
+
+#Overall Error Rate
+OER <- (FP+FN) / n
+OER
+
+#Sensitivity: P(y_hat = 1 | y = 1)
+sensitivity <- TP / (FN + TP)
+sensitivity
+
+#Specificity: P:(y_hat = 0 | y = 0)
+specificity <- TN / (TN + FP)
+specificity
+```
+
+
+#### ROC Curve
 ```{r}
 #ROC
 preds<-predict(model_final,newdata=test, type="response")
@@ -258,9 +320,10 @@ roc_result<-performance(rates,measure="tpr", x.measure="fpr")
 
 plot(roc_result, main="Model ROC Curve")
 lines(x = c(0,1), y = c(0,1), col="red")
+lines(x = c(FPR, FPR), y= c(0,1), col="blue")
 ```
 
-AUC
+#### AUC
 ```{r}
 ##compute the AUC
 aucvalues <- performance(rates, measure = "auc")
@@ -279,5 +342,17 @@ GVIF^(1/2*DF) - low values indicate that multicollinearity is not present
 Delta G^2 - indicates that the model is useful (relative to the intercept only model)
 
 
-TO DO:
-[CONFUSION MATRICES]
+# Highlights
+Additional Facts and highlights used in write-up
+```{r}
+#Number of Deaths and Accident Survivors
+lengths(nass)
+sum(nass$dead_num == 0)
+sum(nass$dead_num == 1)
+```
+
+
+
+```
+
+
