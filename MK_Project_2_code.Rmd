@@ -17,6 +17,7 @@ library(car)
 library(glmnet)
 library(boot)
 library(caret) 
+library(ISLR)
 library(tidyverse) 
 ```
 
@@ -201,4 +202,17 @@ kRep_model <- train(dead_num ~ dvcat + seatbelt + frontal + sex + ageOFocc +
 print(kRep_model)
 ```
 
+```{r}
+#best lambda calculation
+x<-model.matrix(dead_num~dvcat + seatbelt + frontal + sex + ageOFocc + 
+    abcat + occRole, nass)[,-1]
+y<-nass$dead_num
+
+train_lam<-sample(1:nrow(x), nrow(x)/2) 
+test_lam<-(-train_lam)
+y.tes_lamt<-y[test_lam] 
+cv.out<-cv.glmnet(x[train_lam,],y[train_lam],alpha=1, family ="binomial") 
+bestlam<-cv.out$lambda.min
+bestlam
+```
 
