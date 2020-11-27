@@ -1,0 +1,283 @@
+---
+title: "Project 2 - Car Accident Fatalities"
+author: "John, Daniel, Jing, Michael"
+date: "11/26/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(faraway) #used for VIF
+library(multcomp)
+library(ROCR)
+library(car) #used for GVIF (to address categorical variables) https://cran.r-project.org/web/packages/car/car.pdf
+library(leaps) #For All Regression
+```
+
+# Data Cleaning
+
+## Import Data & Clean
+
+- Load Data
+- Drop unwanted columns
+- Remove rows with "N/A" (only one exists after unwanted columns removed)
+
+Unwanted Columns:
+- X: just a number with no corresponding contextual information
+- caseid: just an identifier, not contextually relevant
+- weight: used in weighting of observations, not used in our model selection process
+- injury severity: will assume that this is not known when presence of fatality is unknown
+
+```{r}
+
+# read csv file
+nass <- read.csv("nassCDS.csv", header = T)
+lengths(nass)
+
+# drop column, X, caseid, weight, injSeverity
+nass=subset(nass, select = -c(X,caseid, weight, injSeverity))
+lengths(nass)
+
+# check for rows containing NA
+which(is.na(nass), arr.ind=TRUE)
+
+# remove rows containing NA
+nass <- nass[complete.cases(nass), ]
+lengths(nass)
+
+```
+
+## Convert categorical variables to factors
+
+- Ensure categorical variables are factored
+- Change "Dead" from ('alive', 'dead') to (0, 1)
+
+```{r}
+#convert categorical to factor
+nass$dead<-factor(nass$dead) 
+nass$dvcat<-factor(nass$dvcat)
+nass$airbag<-factor(nass$airbag)
+nass$seatbelt<-factor(nass$seatbelt)
+nass$sex<-factor(nass$sex)
+nass$abcat<-factor(nass$abcat)
+nass$occRole<-factor(nass$occRole)
+nass$deploy<-factor(nass$deploy)
+nass$abcat<-factor(nass$abcat)
+
+nass$dead_num <- nass$dead
+levels(nass$dead_num) <- c(0,1)
+
+#remove column of dead
+nass=subset(nass, select = -c(dead))
+head(nass, 5)
+```
+
+
+
+# Exploratory Data Analysis
+[ADD CODE / ANALYSIS HERE]
+**************************
+**************************
+**************************
+[ADD CODE / ANALYSIS HERE]
+
+
+# Model Selection - Exploration
+
+## Model Selection Exploration - Full Data Set
+Define full and null models - used in Forward Selection, Backward Elimination, and Stepwise Regression
+```{r}
+fullmod <- glm(dead_num ~. , data = nass, family = "binomial" ,maxit = 100)
+Nullmod <- glm(dead_num~1, data = nass, family = "binomial")
+```
+
+All Regression
+```{r}
+##perform all possible regressions (1st order)
+allreg <- regsubsets(dead_num ~., data=nass, nbest=5)
+
+##create a "data frame" that stores the predictors in the various models considered as well as their various criteria
+best <- as.data.frame(summary(allreg)$outmat)
+best$p <- as.numeric(substr(rownames(best),1,1))+1
+best$r2 <- summary(allreg)$rsq
+best$adjr2 <- summary(allreg)$adjr2
+best$mse <- (summary(allreg)$rss)/(dim(nass)[1]-best$p)
+best$cp <- summary(allreg)$cp
+best$bic <- summary(allreg)$bic
+best
+
+##sort by various criteria
+#best[order(best$r2),]
+#best[order(best$adjr2),]
+best[order(best$mse),]
+#best[order(best$cp),]
+#best[order(best$bic),]
+
+```
+
+
+Backward Elimination
+```{r}
+step(fullmod, scope=list(lower=Nullmod, upper=fullmod), direction="backward")
+```
+
+Stepwise Regression
+```{r}
+step(Nullmod, scope=list(lower=Nullmod, upper=fullmod), direction="both")
+```
+
+Forward Selection
+```{r}
+# forward selection
+step(Nullmod, scope=list(lower=Nullmod, upper=fullmod), direction="forward")
+```
+
+### Model Comments:
+Forward Selection, Backward Elimination, and Stepwise Regression each yielded the same model. 
+
+Choose the following variables in the model we choose based upon (i) exploratory analysis, and (ii) intuition of important factors (speed of accident, seatbelts, etc. - each seem reasonable).
+- dvcat (speed)
+- seatbelt
+- frontal
+- sex
+- ageOFocc
+- abcat (airbag deployment)
+- occRole
+
+
+Exploratory Model
+```{r}
+model_picked <- glm(formula = dead_num ~ dvcat + seatbelt + frontal + sex + ageOFocc + 
+    abcat + occRole, family = "binomial", data = nass, maxit = 100)
+
+summary(model_picked)
+```
+Wald Test on individual predictors:
+Wald test: Z = B_j - 0 / se(B_j)
+Normal Distribution
+Note: Can just compare z-value from summary table to qnorm(0.975)
+```{r}
+qnorm(0.975)
+```
+Can remove:
+-dvcat10-24 (we chose to combine with the reference class, resulting in speed <25km/hr)
+-abcatunavail (we chose to not combine with reference class given different contextual interpretations)
+
+
+Generalized VIF, Delta G^2
+```{r}
+faraway::vif(model_picked)
+car::vif(model_picked)
+1-pchisq(Nullmod$deviance-model_picked$deviance, 11)
+```
+
+GVIF^(1/2*DF) - low values indicate that multicollinearity is not present
+Delta G^2 - indicates that the model is useful (relative to the intercept only model)
+
+
+## Model Formalization & Rationale
+
+Split Data into Training & Test Set
+```{r}
+#creating training and testing dataset
+set.seed(40)
+sample<-sample.int(nrow(nass), floor(.50*nrow(nass)), replace = F)
+train<-nass[sample, ]
+test<-nass[-sample, ]
+```
+
+Automatic Search Processes
+```{r}
+#Define Full Model and Null Model
+fullmod.train <- glm(dead_num ~. , data = train, family = "binomial" ,maxit = 100)
+Nullmod.train <- glm(dead_num~1, data = train, family = "binomial")
+
+# Backward Elimination
+step(fullmod.train, scope=list(lower=Nullmod.train, upper=fullmod.train), direction="backward")
+
+# Stepwise Regression
+step(Nullmod.train, scope=list(lower=Nullmod.train, upper=fullmod.train), direction="both")
+
+# Forward Selection
+step(Nullmod.train, scope=list(lower=Nullmod.train, upper=fullmod.train), direction="forward")
+
+```
+Note: Each of the processes results in the same model
+
+
+```{r}
+qnorm(0.975) #Critical value for Wald Test
+
+model_final <- glm(formula = dead_num ~ dvcat + seatbelt + frontal + sex + ageOFocc + 
+    abcat + occRole, family = "binomial", data = train, maxit = 100)
+
+summary(model_final)
+```
+Note: Consistent with results from model based on full data set, we can combine dvcat10-24 with the reference class. In addition, it intuitively makes sense that differentiating speeds of accidents that are relatively slow may have little additional predictive power in identifying fatilities.
+
+
+### Combine appropriate accident speeds 
+Combine dvcat 10-24 with reference class. Call 1-25
+
+```{r}
+
+# Full Data Set - combine categories
+nass$New_dvcat=nass$dvcat
+levels(nass$New_dvcat)<-c(levels(nass$New_dvcat),"1-24")
+nass$New_dvcat[nass$dvcat=="1-9km/h"]<-"1-24"
+nass$New_dvcat[nass$dvcat=="10-24"]<-"1-24"
+nass$New_dvcat <- droplevels(nass$New_dvcat)
+levels(nass$New_dvcat)
+nass$New_dvcat<- relevel(nass$New_dvcat, ref = "1-24")
+levels(nass$New_dvcat)
+
+```
+
+### Refit model based upon new categorization
+```{r}
+#creating training and testing dataset
+set.seed(40) #Note - same sample seed is used for consistency (rather than combining categories for the Test Data set)
+sample<-sample.int(nrow(nass), floor(.50*nrow(nass)), replace = F)
+train<-nass[sample, ]
+test<-nass[-sample, ]
+
+model_final <- glm(formula = dead_num ~ New_dvcat + seatbelt + frontal + sex + ageOFocc + 
+    abcat + occRole, family = "binomial", data = train, maxit = 100)
+
+summary(model_final)
+
+```
+### Model Validation
+ROC Curve
+```{r}
+#ROC
+preds<-predict(model_final,newdata=test, type="response")
+rates<-prediction(preds, test$dead_num)
+roc_result<-performance(rates,measure="tpr", x.measure="fpr")
+
+plot(roc_result, main="Model ROC Curve")
+lines(x = c(0,1), y = c(0,1), col="red")
+```
+
+AUC
+```{r}
+##compute the AUC
+aucvalues <- performance(rates, measure = "auc")
+auc <- aucvalues@y.values[[1]]
+auc
+```
+
+Generalized VIF, Delta G^2
+```{r}
+faraway::vif(model_final)
+car::vif(model_final)
+1-pchisq(Nullmod.train$deviance-model_final$deviance, 11)
+```
+
+GVIF^(1/2*DF) - low values indicate that multicollinearity is not present
+Delta G^2 - indicates that the model is useful (relative to the intercept only model)
+
+
+TO DO:
+[CONFUSION MATRICES]
