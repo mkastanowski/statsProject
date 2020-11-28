@@ -65,7 +65,7 @@ head(nass, 5)
 fullmod <- glm(dead_num ~. , data = nass, family = "binomial" ,maxit = 100)
 summary(fullmod)
 faraway::vif(fullmod)
-car::vif(fullmod)
+#car::vif(fullmod)
 ```
 ```{r}
 Nullmod <- glm(dead_num~1, data = nass, family = "binomial")
@@ -141,32 +141,19 @@ vif(model_picked)
 contrasts(nass$dvcat)
 contrasts(nass$abcat)
 ```
-```{r}
-attach(nass)
-pairwise<-glht(model_picked, linfct = mcp( dvcat= "Tukey"))
-summary(pairwise)
-
-pairwise<-glht(model_picked, linfct = mcp( abcat= "Tukey"))
-summary(pairwise)
-
-detach(nass)
-```
-## note, unavail is no different from deploy
-
-
 
 ```{r}
 # combine categories
 nass$New_dvcat=nass$dvcat
-levels(nass$New_dvcat)<-c(levels(nass$New_dvcat),"1-39")
-nass$New_dvcat[nass$dvcat=="1-9km/h"]<-"1-39"
-nass$New_dvcat[nass$dvcat=="10-24"]<-"1-39"
-nass$New_dvcat[nass$dvcat=="25-39"]<-"1-39"
+levels(nass$New_dvcat)<-c(levels(nass$New_dvcat),"1-24")
+nass$New_dvcat[nass$dvcat=="1-9km/h"]<-"1-24"
+nass$New_dvcat[nass$dvcat=="10-24"]<-"1-24"
+
 
 
 nass$New_dvcat <- droplevels(nass$New_dvcat)
 levels(nass$New_dvcat)
-nass$New_dvcat<- relevel(nass$New_dvcat, ref = "1-39")
+nass$New_dvcat<- relevel(nass$New_dvcat, ref = "1-24")
 levels(nass$New_dvcat)
 
 model_picked <- glm(formula = dead_num ~ New_dvcat + seatbelt + frontal + sex + ageOFocc + 
@@ -183,20 +170,20 @@ vif(model_picked)
 
 
 ```{r}
-nass$New_abcat=nass$abcat
-levels(nass$New_abcat)<-c(levels(nass$New_abcat),"unavail_deploy")
-nass$New_abcat[nass$abcat=="deploy"]<-"unavail_deploy"
-nass$New_abcat[nass$abcat=="unavail"]<-"unavail_deploy"
-
-nass$New_abcat <- droplevels(nass$New_abcat)
-levels(nass$New_abcat)
-levels(nass$New_abcat)
-
-model_picked <- glm(formula = dead_num ~ New_dvcat + seatbelt + frontal + sex + ageOFocc + 
-    New_abcat + occRole, family = "binomial", data = nass, maxit = 100)
-summary(model_picked)
-
-vif(model_picked)
+# nass$New_abcat=nass$abcat
+# levels(nass$New_abcat)<-c(levels(nass$New_abcat),"unavail_deploy")
+# nass$New_abcat[nass$abcat=="deploy"]<-"unavail_deploy"
+# nass$New_abcat[nass$abcat=="unavail"]<-"unavail_deploy"
+# 
+# nass$New_abcat <- droplevels(nass$New_abcat)
+# levels(nass$New_abcat)
+# levels(nass$New_abcat)
+# 
+# model_picked <- glm(formula = dead_num ~ New_dvcat + seatbelt + frontal + sex + ageOFocc + 
+#     New_abcat + occRole, family = "binomial", data = nass, maxit = 100)
+# summary(model_picked)
+# 
+# vif(model_picked)
 ```
 
 
@@ -207,110 +194,75 @@ vif(model_picked)
 
 ```{r}
 library(ROCR)
-# Assign Training and Test data
+# Assign Training and Testing data
 
-#Fit regression
-
-
-preds<-predict(model_full,newdata=test, type="response")
-#preds[is.na(preds)]<-0
-
-rates<-prediction(preds, test$y)
-
-roc_result<-performance(rates,measure="tpr", x.measure="fpr")
-
-plot(roc_result, main="ROC Curve for Exploratory Model")
-lines(x = c(0,1), y = c(0,1), col="red")
-
-```
-```{r}
-##compute the AUC
-aucvalues <- performance(rates, measure = "auc")
-auc <- aucvalues@y.values[[1]]
-auc
-
-##confusion matrix. Actual values in the rows, predicted classification in cols
-table(test$y, preds>0.1)
-table(test$y, preds>0.25)
-table(test$y, preds>0.5)
-table(test$y, preds>0.75)
-
-```
-
-```{r}
-#creating training and testing dataset
 set.seed(139)
 sample<-sample.int(nrow(nass), floor(.50*nrow(nass)), replace = F)
-train<-nass[sample, ]
-test<-nass[-sample, ]
-
-
-#full Model
-model_full <- glm(formula = y ~ New_dvcat + seatbelt+ frontal + ageOFocc + New_abcat + 
-    occRole, family = "binomial", data = train, maxit = 100)
-summary(model_full)
-
-#Null Model
-model_null <- glm(y~1, data=train, "binomial", maxit = 100)
-summary(model_null)
-
-library(ROCR)
-vif(model_full)
-# Assign Training and Test data
+training<-nass[sample, ]
+testing<-nass[-sample, ]
 
 #Fit regression
-#model_test <- glm(dead_num~dvcat+airbag+seatbelt+frontal, data = train, family = "binomial")
+preds<-predict(model_picked,newdata=testing, type="response")
 
-preds<-predict(model_full,newdata=test, type="response")
-#preds[is.na(preds)]<-0
 
-rates<-prediction(preds, test$y)
+rates<-prediction(preds, testing$dead_num)
 
 roc_result<-performance(rates,measure="tpr", x.measure="fpr")
 
 plot(roc_result, main="ROC Curve for Exploratory Model")
 lines(x = c(0,1), y = c(0,1), col="red")
 
+```
+```{r}
 ##compute the AUC
 aucvalues <- performance(rates, measure = "auc")
 auc <- aucvalues@y.values[[1]]
 auc
 
-##confusion matrix. Actual values in the rows, predicted classification in cols
-table(test$y, preds>0.1)
-table(test$y, preds>0.25)
-table(test$y, preds>0.5)
-table(test$y, preds>0.75)
+#confusion matrix. Actual values in the rows, predicted classification in cols
+table(testing$dead_num, preds>0.1)
+table(testing$dead_num, preds>0.25)
+table(testing$dead_num, preds>0.5)
+table(testing$dead_num, preds>0.75)
+
+
+# find the best threshold
+auc=0
+labels= testing$dead_num
+pred=predict(model_picked,newdata=testing,type="response")
+for(i in 1:100){
+    predictions=ifelse(as.numeric(unlist(pred))>(0.01*i),1,0)
+
+
+    #predictions
+    predictions1=prediction(predictions,labels)
+    perf=performance(predictions1,"tpr","fpr")
+    auc.perf=performance(predictions1,measure="auc")
+    auc[i]=auc.perf@y.values[[1]]
+}
+
+auc
+```
+
+```{r}
+thresholds= seq(0.01,1,0.01)
+auc=unlist(auc,recursive=TRUE,use.names =TRUE)
+best=which.max(auc)
+best.threshold=thresholds[best]
+
+plot(thresholds,auc[1:100],type="b",ylab="AUC",main="AUC VS Threshold",col="blue")
+points(thresholds[best],auc[best],pch=19,col="red")
+
 ```
 
 
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+```{r}
+table(nass$dead_num)
+plot(nass$dead_num,main="Distribution of Dependent Variable")
+```
 
 
 
