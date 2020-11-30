@@ -179,13 +179,12 @@ summary(model_picked.interaction1)
 
 
 # New_dvcat & abcat
-model_picked.interaction2 <- glm(formula = dead_num ~ New_dvcat + seatbelt + frontal + sex + ageOFocc + 
-    abcat + occRole + New_dvcat*abcat, family = "binomial", data = nass, maxit = 100)
+model_picked.interaction2 <- glm(formula = dead_num ~ New_dvcat + seatbelt + frontal + sex + ageOFocc + abcat + occRole + New_dvcat * seatbelt + New_dvcat*abcat, family = "binomial", data = nass, maxit = 100)
 summary(model_picked.interaction2)
 
 
 # Delta G squared
-1-pchisq(model_picked$deviance-model_picked.interaction2$deviance, 6)
+1-pchisq(model_picked.interaction1$deviance-model_picked.interaction2$deviance, 6)
 
 ```
 ```{r}
@@ -245,7 +244,7 @@ training<-nass[sample, ]
 testing<-nass[-sample, ]
 
 #Fit regression
-preds<-predict(model_picked,newdata=testing, type="response")
+preds<-predict(model_picked.interaction1,newdata=testing, type="response")
 
 
 rates<-prediction(preds, testing$dead_num)
