@@ -16,6 +16,7 @@ library(faraway)
 library(car)
 library(glmnet)
 library(boot)
+
 library(caret) 
 library(ISLR)
 library(tidyverse) 
@@ -173,9 +174,9 @@ loocv_sample<-nass[sub_sample_1, ]
 model_picked <- glm(formula = dead_num ~ dvcat + seatbelt + frontal + sex + ageOFocc + 
     abcat + occRole, family = "binomial", data = loocv_sample, maxit = 100)
 
-cv.err<-cv.glm(loocv_sample, model_picked)
+#cv.err<-cv.glm(loocv_sample, model_picked)
 #cv.err$delta[1] ##the output for the LOOCV should match your own
-cv.glm(loocv_sample, model_picked, K=5)$delta[1] ##k fold CV with k=10
+#cv.glm(loocv_sample, model_picked, K=5)$delta[1] ##k fold CV with k=10
 
 ```
 
@@ -193,13 +194,28 @@ k_model <- train(dead_num ~ dvcat + seatbelt + frontal + sex + ageOFocc +
 print(k_model)
 
 
+1-k_model$results$Accuracy
+```
+
+
+
+```{r}
 #repeated_k fold
 kRep_model <- train(dead_num ~ dvcat + seatbelt + frontal + sex + ageOFocc + 
     abcat + occRole, data = nass,  
                method = "glm", 
                trControl = train_control_r) 
 
-print(kRep_model)
+kRep_model
+1-kRep_model$results$Accuracy
+```
+
+```{r}
+#K Fold via another means
+glm.fit<-glm(dead_num ~ dvcat + seatbelt + frontal + sex + ageOFocc + abcat + occRole, data=nass, family = "binomial")
+#cv.err<-cv.glm(test, glm.fit)
+#cv.err$delta[1] ##the output for the LOOCV should match your own
+cv.glm(nass, glm.fit, K=10)$delta[1] ##k fold CV with k=10
 ```
 
 ```{r}
