@@ -165,6 +165,49 @@ vif(model_picked)
 ```
 
 
+```{r}
+#interaction term testing
+# New_dvcat & seatbelt
+
+#model_reduced <- glm(formula = dead_num ~ New_dvcat + seatbelt, family = "binomial", data = nass, maxit = 100)
+model_picked.interaction1 <- glm(formula = dead_num ~ New_dvcat + seatbelt + frontal + sex + ageOFocc + 
+    abcat + occRole + New_dvcat*seatbelt, family = "binomial", data = nass, maxit = 100)
+summary(model_picked.interaction1)
+
+# Delta G squared
+1-pchisq(model_picked$deviance-model_picked.interaction1$deviance, 3)
+
+
+# New_dvcat & abcat
+model_picked.interaction2 <- glm(formula = dead_num ~ New_dvcat + seatbelt + frontal + sex + ageOFocc + 
+    abcat + occRole + New_dvcat*abcat, family = "binomial", data = nass, maxit = 100)
+summary(model_picked.interaction2)
+
+
+# Delta G squared
+1-pchisq(model_picked$deviance-model_picked.interaction2$deviance, 6)
+
+```
+```{r}
+#interaction term testing
+# New_dvcat & seatbelt
+model_reduced <- glm(formula = dead_num ~ New_dvcat + seatbelt, family = "binomial", data = nass, maxit = 100)
+model_picked.interaction1 <- glm(formula = dead_num ~ New_dvcat*seatbelt, family = "binomial", data = nass, maxit = 100)
+summary(model_picked.interaction1)
+
+# Delta G squared
+1-pchisq(model_reduced$deviance-model_picked.interaction1$deviance, 3)
+
+
+# New_dvcat & abcat
+model_reduced <- glm(formula = dead_num ~ New_dvcat + abcat, family = "binomial", data = nass, maxit = 100)
+model_picked.interaction2 <- glm(formula = dead_num ~ New_dvcat*abcat, family = "binomial", data = nass, maxit = 100)
+summary(model_picked.interaction2)
+
+
+# Delta G squared
+1-pchisq(model_reduced$deviance-model_picked.interaction2$deviance, 6)
+```
 
 
 
