@@ -22,6 +22,7 @@ library(car) #used for GVIF (to address categorical variables) https://cran.r-pr
 library(leaps) #For All Regression
 library(caret)  #Used for cross validation
 library(boot)  #Used for cross validation
+library(jtools) #Model Comparison Table
 ```
 
 # 1. Data Import &Cleaning
@@ -386,6 +387,71 @@ Note:
 
 - The Delta G^2 test indicates that given the existing predictors in the model, the proposed interaction terms (dvcat & abcat or speed and airbag) are not significant and can be excluded
 
+
+Directly compare the coefficients of the two models in a single table
+```{r}
+export_summs(model_final, model_final.interaction1, scale = FALSE)
+```
+Note: the interaction terms are negative, but original categorical variables are higher. Look at net effect, including change in intercept
+
+
+Net Effect  55+
+```{r}
+#Looking only at: seatbelt = none, a particular speed, change in intercept
+##Note: assume everything else belongs to reference classes; also coefficient for age of occupant is unchanged
+
+#55+: w/ interaction terms
+model_final.interaction1$coefficients["seatbeltnone"]
+model_final.interaction1$coefficients["New_dvcat55+"]
+model_final.interaction1$coefficients["New_dvcat55+:seatbeltnone"]
+model_final.interaction1$coefficients["(Intercept)"]
+
+Total_Int <- model_final.interaction1$coefficients["New_dvcat55+"] + model_final.interaction1$coefficients["seatbeltnone"]+ model_final.interaction1$coefficients["New_dvcat55+:seatbeltnone"] + model_final.interaction1$coefficients["(Intercept)"]
+
+#55+: w/o interaction terms
+model_final$coefficients["seatbeltnone"]
+model_final$coefficients["New_dvcat55+"]
+model_final$coefficients["(Intercept)"]
+
+Total <- model_final$coefficients["New_dvcat55+"] + model_final$coefficients["seatbeltnone"]+ model_final$coefficients["(Intercept)"]
+
+print("Model w/ Interacions")
+Total_Int
+
+print("Model w/o Interacions")
+Total
+
+```
+
+Net Effect  25-39+
+```{r}
+#Looking only at: seatbelt = none, a particular speed, change in intercept
+##Note: assume everything else belongs to reference classes; also coefficient for age of occupant is unchanged
+
+#55+: w/ interaction terms
+model_final.interaction1$coefficients["seatbeltnone"]
+model_final.interaction1$coefficients["New_dvcat25-39"]
+model_final.interaction1$coefficients["New_dvcat25-39:seatbeltnone"]
+model_final.interaction1$coefficients["(Intercept)"]
+
+Total_Int25 <- model_final.interaction1$coefficients["New_dvcat25-39"] + model_final.interaction1$coefficients["seatbeltnone"]+ model_final.interaction1$coefficients["New_dvcat25-39:seatbeltnone"] + model_final.interaction1$coefficients["(Intercept)"]
+
+#55+: w/o interaction terms
+model_final$coefficients["seatbeltnone"]
+model_final$coefficients["New_dvcat25-39"]
+model_final$coefficients["(Intercept)"]
+
+Total25 <- model_final$coefficients["New_dvcat25-39"] + model_final$coefficients["seatbeltnone"]+ model_final$coefficients["(Intercept)"]
+
+print("Model w/ Interacions")
+Total_Int25
+
+print("Model w/o Interacions")
+Total25
+
+```
+
+
 ### Outliers and Innfluential Data Points
 
 ```{r}
@@ -429,6 +495,24 @@ plot(seq(1, length(cook.ep), 1),cook.ep,type="l", main="Cook's Distance",
 abline(h=qf(0.5,p,n-p), col="red")
 ```
 Note: DFFITS, DFBETAS, and Cook's Distance yield significantly different results.
+
+Number of influential data points (as proportion of training data):
+```{r}
+#Cooks
+length(COOKS[COOKS>qf(0.5,p,n-p)])/nrow(train)
+
+#DFFITS
+length(DFFITS[abs(DFFITS)>2*sqrt(p/n)])/nrow(train)
+
+#DFBETAS
+length(DFBETAS[abs(DFBETAS)>2/sqrt(n)])/nrow(train)
+
+```
+Note:
+
+- Cook's Distance - 0%
+- DFFITS - 9.7%
+- DFBETAS - 75.1%
 
 
 ### Confusion Matrices
@@ -606,4 +690,5 @@ model_abcat$deviance
 model_age$deviance
 
 ```
+
 
