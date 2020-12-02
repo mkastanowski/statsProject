@@ -413,7 +413,7 @@ aucvalues <- performance(rates, measure = "auc")
 auc <- aucvalues@y.values[[1]]
 auc
 ```
-
+#### GVIF, Delta G^2
 Generalized VIF - detect multicollinearity 
 Delta G^2 - indicates if model is useful (relative to Null model)
 ```{r}
@@ -431,8 +431,6 @@ GVIF^(1/2*DF) - low values for model without interaction terms indicate that mul
 
 Delta G^2 - indicates that the model is useful (relative to the intercept only model)
 
-
-# Cross Validation
 
 
 # Highlights
@@ -476,7 +474,6 @@ model_seatbelt$deviance
 model_frontal$deviance
 model_abcat$deviance
 model_age$deviance
-
 
 ```
 
