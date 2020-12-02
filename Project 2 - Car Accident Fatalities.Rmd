@@ -5,6 +5,13 @@ date: "11/26/2020"
 output: html_document
 ---
 
+Our process included:
+1) Data Import & Cleaning
+2) Data Exploration
+3) Model Exploration (Full Data Set)
+4) Model Selection, Formalization, and Validation (Test & Train Data Set)
+5) Highlighting Unique Observations
+
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 
@@ -17,13 +24,14 @@ library(caret)  #Used for cross validation
 library(boot)  #Used for cross validation
 ```
 
-# Data Cleaning
+# 1. Data Import &Cleaning
 
 ### Import Data & Clean
 
 - Load Data
 - Drop unwanted columns
 - Remove rows with "N/A" (only one exists after unwanted columns removed)
+
 
 Unwanted Columns:
 
@@ -78,7 +86,7 @@ head(nass, 5)
 
 
 
-# Exploratory Data Analysis
+# 2. Exploratory Data Analysis
 [ADD CODE / ANALYSIS HERE]
 **************************
 **************************
@@ -86,8 +94,8 @@ head(nass, 5)
 [ADD CODE / ANALYSIS HERE]
 
 
-# Model Selection - Exploration
-Note: When developing our formal model we first split the data set into a training and test set.  However, we also performed some exploratory analysis on the full data set. Given that a model using the full data set can not be validated using ROC/AUC, this is purely for exploratory purposes.
+# 3. Model Exploration (Full Data Set)
+Note: When developing our formal model we first split the data set into a training and test set.  However, we also performed some exploratory analysis on the full data set. Given that a model using the full data set can not be validated using ROC/AUC, this is purely for exploratory purposes. This exploratory analysis is summarized below.
 
 ### Model Selection Exploration - Full Data Set
 Define full and null models - used in Forward Selection, Backward Elimination, and Stepwise Regression
@@ -141,6 +149,7 @@ step(Nullmod, scope=list(lower=Nullmod, upper=fullmod), direction="forward")
 Forward Selection, Backward Elimination, and Stepwise Regression each yielded the same model. 
 
 Choose the following variables in the model we choose based upon (i) exploratory analysis, and (ii) intuition of important factors (speed of accident, seatbelts, etc. - each seem reasonable).
+
 - dvcat (speed)
 - seatbelt
 - frontal
@@ -158,14 +167,18 @@ model_picked <- glm(formula = dead_num ~ dvcat + seatbelt + frontal + sex + ageO
 summary(model_picked)
 ```
 Wald Test on individual predictors:
+
 Wald test: Z = B_j - 0 / se(B_j)
+
 Normal Distribution
+
 Note: Can just compare z-value from summary table to qnorm(0.975)
 
 ```{r}
 qnorm(0.975)
 ```
 Can remove:
+
 -dvcat10-24 (we chose to combine with the reference class, resulting in speed <25km/hr)
 -abcatunavail (we chose to not combine with reference class given different contextual interpretations)
 
@@ -176,12 +189,58 @@ faraway::vif(model_picked)
 car::vif(model_picked)
 1-pchisq(Nullmod$deviance-model_picked$deviance, 11)
 ```
+Note:
 
-GVIF^(1/2*DF) - low values indicate that multicollinearity is not present
-Delta G^2 - indicates that the model is useful (relative to the intercept only model)
+- VIF (faraway package) not suited to logistic regression
+- GVIF^(1/2*DF) - low values indicate that multicollinearity is not present
+- Delta G^2 - indicates that the model is useful (relative to the intercept only model)
+
+#### Outliers and Influential Data Points
+
+```{r}
+# Influential Points Check
+n<-nrow(nass)
+p<-9
+
+# Cook's Distance
+print("cooks")
+COOKS<-cooks.distance(model_picked)
+COOKS[COOKS>qf(0.5,p,n-p)]
+
+# DFFITS
+print("DFFITS")
+DFFITS<-dffits(model_picked)
+DFFITS[abs(DFFITS)>2*sqrt(p/n)]
+
+# DFBETAS
+print('DFBETAS')
+DFBETAS<-dfbetas(model_picked)
+DFBETAS[abs(DFBETAS)>2/sqrt(n)]
+
+# Plotting
+par(mfrow=c(1,2))
+
+dffits.ep <- dffits(model_picked)
+plot(seq(1, length(dffits.ep), 1),dffits.ep,type="l", main="DFFITS Plot",
+       xlab="Index", ylab="Dffits")
+abline(h=2*sqrt(p/n), col="red")
+abline(h=-2*sqrt(p/n), col="red")
+
+dfbetas.ep <- dfbetas(model_picked)
+plot(seq(1, length(dfbetas.ep), 1),dfbetas.ep,type="l", main="DFBETAS Plot",
+       xlab="Index", ylab="DFBETAS")
+abline(h=2*sqrt(p/n), col="red")
+abline(h=-2*sqrt(p/n), col="red")
+
+cook.ep <- cooks.distance(model_picked)
+plot(seq(1, length(cook.ep), 1),cook.ep,type="l", main="Cook's Distance",
+       xlab="Index", ylab="Cook's Distance", ylim=c(0,1))
+abline(h=qf(0.5,p,n-p), col="red")
+```
+Note: DFFITS, DFBETAS, and Cook's Distance yield significantly different results.
 
 
-## Model Formalization & Rationale
+# 4. Model Selection, Formalization, and Validation (Test & Train Data Set)
 
 Split Data into Training & Test Set
 ```{r}
@@ -192,7 +251,7 @@ train<-nass[sample, ]
 test<-nass[-sample, ]
 ```
 
-Automatic Search Processes
+Automatic Search Processes (Backward Elimination, Stepwise Regression, Forward Selection)
 ```{r}
 #Define Full Model and Null Model
 fullmod.train <- glm(dead_num ~. , data = train, family = "binomial" ,maxit = 100)
@@ -208,20 +267,25 @@ step(Nullmod.train, scope=list(lower=Nullmod.train, upper=fullmod.train), direct
 step(Nullmod.train, scope=list(lower=Nullmod.train, upper=fullmod.train), direction="forward")
 
 ```
-Note: Each of the processes results in the same model
+Note: 
+
+
+- Each of the processes results in the same model
+- Automatic search processes ignore interaction terms (explored in subsequent analysis)
 
 
 Fit Model to training data
 Obtain Critical value for Wald Test
 ```{r}
-qnorm(0.975) #Critical value for Wald Test
-
 model_final <- glm(formula = dead_num ~ dvcat + seatbelt + frontal + sex + ageOFocc + 
     abcat + occRole, family = "binomial", data = train, maxit = 100)
 
 summary(model_final)
+
+#Critical value for Wald Test
+qnorm(0.975) 
 ```
-Note: Consistent with results from model based on full data set, we can combine dvcat10-24 with the reference class. In addition, it intuitively makes sense that differentiating speeds of accidents that are relatively slow may have little additional predictive power in identifying fatilities.
+Note: Consistent with results from model based on full data set, we can combine dvcat10-24 with the reference class. In addition, it intuitively makes sense that differentiating speeds of relatively slow accidents may add little additional predictive power in identifying fatalities.
 
 
 #### Combine appropriate accident speeds 
@@ -259,7 +323,6 @@ train$New_dvcat <- droplevels(train$New_dvcat)
 levels(train$New_dvcat)
 train$New_dvcat<- relevel(train$New_dvcat, ref = "1-24")
 levels(train$New_dvcat)
-
 ```
 
 #### Refit model based upon new categorization
@@ -270,7 +333,7 @@ model_final <- glm(formula = dead_num ~ New_dvcat + seatbelt + frontal + sex + a
 summary(model_final)
 ```
 
-### Explore Interaction Terms
+#### Explore Interaction Terms
 
 Interaction Terms - dvcat (speed) & seatbelt
 ```{r}
@@ -287,7 +350,8 @@ summary(model_final.interaction1)
 
 ```
 Note:
-- The Delta G^2 test indicates that the interaction term is significant and should be included
+
+- The Delta G^2 test indicates that the interaction terms are significant and should be included
 - Observing the coefficients, all dvcat and the seatbelt coefficient are higher, while the interaction terms are negative (more likely to survive)
 
 
@@ -303,11 +367,75 @@ summary(model_final.interaction2)
 
 ```
 Note:
-- The Delta G^2 test indicates that the interaction term is not significant and can be excluded
+
+- The Delta G^2 test indicates that given the existing predictors in the model, the proposed interaction terms (dvcat & abcat or speed and airbag) are not significant and can be excluded
 
 
-### Confusion Matrices - Original Model (no interaction terms) (for comparison)
+Interaction Terms - dvcat (speed) & frontal
+```{r}
+# New_dvcat & abcat
+model_final.interaction3 <- glm(formula = dead_num ~ New_dvcat + seatbelt + frontal + sex + ageOFocc + abcat + occRole + New_dvcat * seatbelt + New_dvcat*frontal, family = "binomial", data = train, maxit = 100)
+
+summary(model_final.interaction3)
+
+# Delta G squared
+1-pchisq(model_final.interaction1$deviance-model_final.interaction3$deviance, 3)
+
+```
+Note:
+
+- The Delta G^2 test indicates that given the existing predictors in the model, the proposed interaction terms (dvcat & abcat or speed and airbag) are not significant and can be excluded
+
+### Outliers and Innfluential Data Points
+
+```{r}
+# Influential Points Check
+n<-nrow(train)
+p<-15
+
+# Cook's Distance
+print("cooks")
+COOKS<-cooks.distance(model_final.interaction1)
+COOKS[COOKS>qf(0.5,p,n-p)]
+
+# DFFITS
+print("DFFITS")
+DFFITS<-dffits(model_final.interaction1)
+DFFITS[abs(DFFITS)>2*sqrt(p/n)]
+
+# DFBETAS
+print('DFBETAS')
+DFBETAS<-dfbetas(model_final.interaction1)
+DFBETAS[abs(DFBETAS)>2/sqrt(n)]
+
+# Plotting
+par(mfrow=c(1,2))
+
+dffits.ep <- dffits(model_final.interaction1)
+plot(seq(1, length(dffits.ep), 1),dffits.ep,type="l", main="DFFITS Plot",
+       xlab="Index", ylab="Dffits")
+abline(h=2*sqrt(p/n), col="red")
+abline(h=-2*sqrt(p/n), col="red")
+
+dfbetas.ep <- dfbetas(model_final.interaction1)
+plot(seq(1, length(dfbetas.ep), 1),dfbetas.ep,type="l", main="DFBETAS Plot",
+       xlab="Index", ylab="DFBETAS")
+abline(h=2*sqrt(p/n), col="red")
+abline(h=-2*sqrt(p/n), col="red")
+
+cook.ep <- cooks.distance(model_final.interaction1)
+plot(seq(1, length(cook.ep), 1),cook.ep,type="l", main="Cook's Distance",
+       xlab="Index", ylab="Cook's Distance", ylim=c(0,1))
+abline(h=qf(0.5,p,n-p), col="red")
+```
+Note: DFFITS, DFBETAS, and Cook's Distance yield significantly different results.
+
+
+### Confusion Matrices
+
+##### Confusion Matrices - Original Model (no interaction terms - for comparison)
 Explore Confusion Matrices for various values of lambda
+Model without interaction terms (for comparison)
 ```{r}
 preds.noI<-predict(model_final,newdata=test, type="response")
 
@@ -319,7 +447,7 @@ table(test$dead_num, preds.noI>0.25)
 table(test$dead_num, preds.noI>0.5)
 ```
 
-### Confusion Matrices (final model with interaction terms)
+##### Confusion Matrices (final model with interaction terms)
 Explore Confusion Matrices for various values of lambda
 ```{r}
 preds<-predict(model_final.interaction1,newdata=test, type="response")
@@ -332,10 +460,10 @@ table(test$dead_num, preds>0.25)
 table(test$dead_num, preds>0.5)
 ```
 
-Given use cases (first responders, insurance companies), are more concerned with correctly identifying deaths even at the cost of higher false positive rates, select lower value of lambda.
+Given use cases (first responders, insurance companies), are more concerned with correctly identifying deaths even at the cost of higher false positive rates, select lower value of lambda. However, we would like to select a cutoff value that balances false positives with sensitivity.
 
 
-### Confusion Matrices - Detailed
+##### Confusion Matrices - Detailed
 After identifying lamda = .05 as roughly the cutoff that struck the optimal balance, we drilled in with greater detail:
 ```{r}
 table(test$dead_num, preds>0.03)
@@ -414,7 +542,9 @@ auc <- aucvalues@y.values[[1]]
 auc
 ```
 #### GVIF, Delta G^2
+
 Generalized VIF - detect multicollinearity 
+
 Delta G^2 - indicates if model is useful (relative to Null model)
 ```{r}
 faraway::vif(model_final.interaction1)
@@ -426,24 +556,24 @@ faraway::vif(model_final)
 car::vif(model_final)
 1-pchisq(Nullmod.train$deviance-model_final$deviance, 10)
 ```
-```
 GVIF^(1/2*DF) - low values for model without interaction terms indicate that multicollinearity is not present. Once interaction terms are introduced, some multicollinearity may be present, regarding seatbelt, dvcat, and the interaction term (as expected)
 
 Delta G^2 - indicates that the model is useful (relative to the intercept only model)
 
 
 
-# Highlights
-Additional Facts and highlights used in write-up
+# 5. Highlighting Unique Observations
+Additional Information and Facts/Highlights used in write-up
+
+#### Survival/Death Counts
 ```{r}
 #Number of Deaths and Accident Survivors
 lengths(nass)
 sum(nass$dead_num == 0)
 sum(nass$dead_num == 1)
-
 ```
 
-# Potentially Delete: comparison of individual variables
+#### Comparison of individual variables
 
 ```{r}
 # dvcat (speed) vs. seatbelt 
