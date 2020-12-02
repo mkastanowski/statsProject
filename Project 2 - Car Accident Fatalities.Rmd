@@ -10,9 +10,11 @@ knitr::opts_chunk$set(echo = TRUE)
 
 library(faraway) #used for VIF
 library(multcomp)
-library(ROCR)
+library(ROCR) #Used for ROC/AUC
 library(car) #used for GVIF (to address categorical variables) https://cran.r-project.org/web/packages/car/car.pdf
 library(leaps) #For All Regression
+library(caret)  #Used for cross validation
+library(boot)  #Used for cross validation
 ```
 
 # Data Cleaning
@@ -85,6 +87,7 @@ head(nass, 5)
 
 
 # Model Selection - Exploration
+Note: When developing our formal model we first split the data set into a training and test set.  However, we also performed some exploratory analysis on the full data set. Given that a model using the full data set can not be validated using ROC/AUC, this is purely for exploratory purposes.
 
 ### Model Selection Exploration - Full Data Set
 Define full and null models - used in Forward Selection, Backward Elimination, and Stepwise Regression
@@ -108,7 +111,7 @@ best$cp <- summary(allreg)$cp
 best$bic <- summary(allreg)$bic
 best
 
-##sort by various criteria
+##Sort by:
 #best[order(best$r2),]
 #best[order(best$adjr2),]
 best[order(best$mse),]
@@ -147,7 +150,7 @@ Choose the following variables in the model we choose based upon (i) exploratory
 - occRole
 
 
-Exploratory Model
+Exploratory Model (full data set)
 ```{r}
 model_picked <- glm(formula = dead_num ~ dvcat + seatbelt + frontal + sex + ageOFocc + 
     abcat + occRole, family = "binomial", data = nass, maxit = 100)
@@ -158,6 +161,7 @@ Wald Test on individual predictors:
 Wald test: Z = B_j - 0 / se(B_j)
 Normal Distribution
 Note: Can just compare z-value from summary table to qnorm(0.975)
+
 ```{r}
 qnorm(0.975)
 ```
@@ -235,26 +239,91 @@ levels(nass$New_dvcat)
 nass$New_dvcat<- relevel(nass$New_dvcat, ref = "1-24")
 levels(nass$New_dvcat)
 
+# Test Data Set - combine categories
+test$New_dvcat=test$dvcat
+levels(test$New_dvcat)<-c(levels(test$New_dvcat),"1-24")
+test$New_dvcat[test$dvcat=="1-9km/h"]<-"1-24"
+test$New_dvcat[test$dvcat=="10-24"]<-"1-24"
+test$New_dvcat <- droplevels(test$New_dvcat)
+levels(test$New_dvcat)
+test$New_dvcat<- relevel(test$New_dvcat, ref = "1-24")
+levels(test$New_dvcat)
+
+
+# Train Data Set - combine categories
+train$New_dvcat=train$dvcat
+levels(train$New_dvcat)<-c(levels(train$New_dvcat),"1-24")
+train$New_dvcat[train$dvcat=="1-9km/h"]<-"1-24"
+train$New_dvcat[train$dvcat=="10-24"]<-"1-24"
+train$New_dvcat <- droplevels(train$New_dvcat)
+levels(train$New_dvcat)
+train$New_dvcat<- relevel(train$New_dvcat, ref = "1-24")
+levels(train$New_dvcat)
+
 ```
 
 #### Refit model based upon new categorization
 ```{r}
-#Note - same sample seed is used for consistency (rather than combining categories for the Test Data set)
-#creating training and testing dataset
-set.seed(40) 
-sample<-sample.int(nrow(nass), floor(.50*nrow(nass)), replace = F)
-train<-nass[sample, ]
-test<-nass[-sample, ]
-
 model_final <- glm(formula = dead_num ~ New_dvcat + seatbelt + frontal + sex + ageOFocc + 
     abcat + occRole, family = "binomial", data = train, maxit = 100)
 
 summary(model_final)
+```
+
+### Explore Interaction Terms
+
+Interaction Terms - dvcat (speed) & seatbelt
+```{r}
+
+# New_dvcat & seatbelt
+
+#model_reduced <- glm(formula = dead_num ~ New_dvcat + seatbelt, family = "binomial", data = nass, maxit = 100)
+model_final.interaction1 <- glm(formula = dead_num ~ New_dvcat + seatbelt + frontal + sex + ageOFocc + 
+    abcat + occRole + New_dvcat*seatbelt, family = "binomial", data = train, maxit = 100)
+summary(model_final.interaction1)
+
+# Delta G squared
+1-pchisq(model_final$deviance-model_final.interaction1$deviance, 3)
 
 ```
-### Confusion Matrices
+Note:
+- The Delta G^2 test indicates that the interaction term is significant and should be included
+- Observing the coefficients, all dvcat and the seatbelt coefficient are higher, while the interaction terms are negative (more likely to survive)
+
+
+Interaction Terms - dvcat (speed) & abcat (airbag)
+```{r}
+# New_dvcat & abcat
+model_final.interaction2 <- glm(formula = dead_num ~ New_dvcat + seatbelt + frontal + sex + ageOFocc + abcat + occRole + New_dvcat * seatbelt + New_dvcat*abcat, family = "binomial", data = train, maxit = 100)
+
+summary(model_final.interaction2)
+
+# Delta G squared
+1-pchisq(model_final.interaction1$deviance-model_final.interaction2$deviance, 6)
+
+```
+Note:
+- The Delta G^2 test indicates that the interaction term is not significant and can be excluded
+
+
+### Confusion Matrices - Original Model (no interaction terms) (for comparison)
 Explore Confusion Matrices for various values of lambda
 ```{r}
+preds.noI<-predict(model_final,newdata=test, type="response")
+
+## Confusion Matrices - Original Model (for comparison)
+table(test$dead_num, preds.noI>0.01)
+table(test$dead_num, preds.noI>0.05)
+table(test$dead_num, preds.noI>0.1)
+table(test$dead_num, preds.noI>0.25)
+table(test$dead_num, preds.noI>0.5)
+```
+
+### Confusion Matrices (final model with interaction terms)
+Explore Confusion Matrices for various values of lambda
+```{r}
+preds<-predict(model_final.interaction1,newdata=test, type="response")
+
 ## Confusion Matrices
 table(test$dead_num, preds>0.01)
 table(test$dead_num, preds>0.05)
@@ -263,7 +332,20 @@ table(test$dead_num, preds>0.25)
 table(test$dead_num, preds>0.5)
 ```
 
-Given use cases (first responders, insurance companies), are more concerned with correctly identifying deaths even at the cost of higher false positive rates.
+Given use cases (first responders, insurance companies), are more concerned with correctly identifying deaths even at the cost of higher false positive rates, select lower value of lambda.
+
+
+### Confusion Matrices - Detailed
+After identifying lamda = .05 as roughly the cutoff that struck the optimal balance, we drilled in with greater detail:
+```{r}
+table(test$dead_num, preds>0.03)
+table(test$dead_num, preds>0.04)
+table(test$dead_num, preds>0.05)
+table(test$dead_num, preds>0.06)
+table(test$dead_num, preds>0.07)
+```
+After evaluating in greater detail, we decided to use lambda = 0.05 as our cutoff.
+
 
 
 ### Model Validation
@@ -276,6 +358,8 @@ Sensitivity
 Specificity
 
 ```{r}
+#Refers to model with interaction terms
+
 lam <- 0.05 #Selected value of lambda
 
 #Confusion Matrix
@@ -314,7 +398,6 @@ specificity
 #### ROC Curve
 ```{r}
 #ROC
-preds<-predict(model_final,newdata=test, type="response")
 rates<-prediction(preds, test$dead_num)
 roc_result<-performance(rates,measure="tpr", x.measure="fpr")
 
@@ -331,15 +414,25 @@ auc <- aucvalues@y.values[[1]]
 auc
 ```
 
-Generalized VIF, Delta G^2
+Generalized VIF - detect multicollinearity 
+Delta G^2 - indicates if model is useful (relative to Null model)
 ```{r}
+faraway::vif(model_final.interaction1)
+car::vif(model_final.interaction1)
+1-pchisq(Nullmod.train$deviance-model_final.interaction1$deviance, 13)
+
+#Model without interaction terms - for reference
 faraway::vif(model_final)
 car::vif(model_final)
-1-pchisq(Nullmod.train$deviance-model_final$deviance, 11)
+1-pchisq(Nullmod.train$deviance-model_final$deviance, 10)
 ```
+```
+GVIF^(1/2*DF) - low values for model without interaction terms indicate that multicollinearity is not present. Once interaction terms are introduced, some multicollinearity may be present, regarding seatbelt, dvcat, and the interaction term (as expected)
 
-GVIF^(1/2*DF) - low values indicate that multicollinearity is not present
 Delta G^2 - indicates that the model is useful (relative to the intercept only model)
+
+
+# Cross Validation
 
 
 # Highlights
@@ -349,10 +442,41 @@ Additional Facts and highlights used in write-up
 lengths(nass)
 sum(nass$dead_num == 0)
 sum(nass$dead_num == 1)
-```
-
-
 
 ```
 
+# Potentially Delete: comparison of individual variables
+
+```{r}
+# dvcat (speed) vs. seatbelt 
+
+#dvcat (speed)
+model_dvcat <- glm(formula = dead_num ~ New_dvcat, family = "binomial", data = train, maxit = 100)
+summary(model_dvcat)
+
+#seatbelt
+model_seatbelt <- glm(formula = dead_num ~ seatbelt, family = "binomial", data = train, maxit = 100)
+summary(model_seatbelt)
+
+#frontal
+model_frontal <- glm(formula = dead_num ~ frontal, family = "binomial", data = train, maxit = 100)
+summary(model_frontal)
+
+#abcat (airbags)
+model_abcat <- glm(formula = dead_num ~ abcat, family = "binomial", data = train, maxit = 100)
+summary(model_abcat)
+
+#ageOfocc
+model_age <- glm(formula = dead_num ~ ageOFocc, family = "binomial", data = train, maxit = 100)
+summary(model_age)
+model_NULL <- glm(formula = dead_num ~ 1, family = "binomial", data = train, maxit = 100)
+
+model_dvcat$deviance
+model_seatbelt$deviance
+model_frontal$deviance
+model_abcat$deviance
+model_age$deviance
+
+
+```
 
