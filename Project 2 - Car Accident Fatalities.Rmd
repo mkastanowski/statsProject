@@ -246,7 +246,7 @@ Note: DFFITS, DFBETAS, and Cook's Distance yield significantly different results
 Split Data into Training & Test Set
 ```{r}
 #creating training and testing dataset
-set.seed(50)
+set.seed(40)
 sample<-sample.int(nrow(nass), floor(.50*nrow(nass)), replace = F)
 train<-nass[sample, ]
 test<-nass[-sample, ]
@@ -700,5 +700,65 @@ rc <- ROC(form = dead_num ~ New_dvcat + seatbelt + frontal + sex +
 opt <- which.max(rowSums(rc$res[, c("sens", "spec")]))
 ## optimal cut-off point 
 rc$res$lr.eta[opt]
+```
+
+
+# Test Refit of Data
+
+- Resample
+- Calculate key statistics (AUC, Optimal Cutoff, Residual Deviance, Intercept)
+- Repeat multiple times
+
+Check for consistency
+```{r}
+tbl <- data.frame(c(0,0,0,0))
+
+for (i in 1:20) {
+  
+  #creating training and testing dataset
+  #No set seed used
+  Rsample<-sample.int(nrow(nass), floor(.50*nrow(nass)), replace = F)
+  Rtrain<-nass[Rsample, ]
+  Rtest<-nass[-Rsample, ]
+  
+  #Fit Model
+  model_final.R <- glm(formula = dead_num ~ New_dvcat + seatbelt + frontal + sex + ageOFocc + 
+      abcat + occRole + New_dvcat*seatbelt, family = "binomial", data = Rtrain, maxit = 100)
+  
+  ## Confusion Matrices - Original Model (for comparison)
+  Rpreds<-predict(model_final.R,newdata=Rtest, type="response")
+  table(Rtest$dead_num, preds.R>0.05)
+  
+  #ROC
+  Rrates<-prediction(Rpreds, Rtest$dead_num)
+  Rroc_result<-performance(Rrates,measure="tpr", x.measure="fpr")
+  
+  #compute the AUC
+  Raucvalues <- performance(Rrates, measure = "auc")
+  Rauc <- Raucvalues@y.values[[1]]
+  
+  #Compute Optimal Lambda
+  Rrc <- ROC(form = dead_num ~ New_dvcat + seatbelt + frontal + sex + 
+      ageOFocc + abcat + occRole + New_dvcat * seatbelt, data = Rtest)
+  
+  # optimal combination
+  Ropt <- which.max(rowSums(Rrc$res[, c("sens", "spec")]))
+  
+  
+  ### Output:
+  summary(model_final.R)
+  
+  # optimal cut-off point
+  Rrc$res$lr.eta[Ropt]
+  # AUC
+  Rauc
+  # Residual Deviance
+  model_final.R$deviance
+  
+  t <- c(Rauc, Rrc$res$lr.eta[Ropt], model_final.R$deviance, model_final.R$coefficients["(Intercept)"])
+  tbl[i] = t 
+}
+
+tbl
 ```
 
