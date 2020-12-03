@@ -692,3 +692,13 @@ model_age$deviance
 ```
 
 
+```{r}
+library(Epi)
+rc <- ROC(form = dead_num ~ New_dvcat + seatbelt + frontal + sex + 
+    ageOFocc + abcat + occRole + New_dvcat * seatbelt, data = test, plot=c("sp", "ROC") )
+## optimal combination
+opt <- which.max(rowSums(rc$res[, c("sens", "spec")]))
+## optimal cut-off point 
+rc$res$lr.eta[opt]
+```
+
