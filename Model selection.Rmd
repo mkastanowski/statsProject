@@ -187,25 +187,47 @@ summary(model_picked.interaction2)
 1-pchisq(model_picked.interaction1$deviance-model_picked.interaction2$deviance, 6)
 
 ```
+
+
+
 ```{r}
-#interaction term testing
-# New_dvcat & seatbelt
-model_reduced <- glm(formula = dead_num ~ New_dvcat + seatbelt, family = "binomial", data = nass, maxit = 100)
-model_picked.interaction1 <- glm(formula = dead_num ~ New_dvcat*seatbelt, family = "binomial", data = nass, maxit = 100)
-summary(model_picked.interaction1)
+# influential points check
+#
+n<-nrow(nass)
+print("total")
+print(n)
+p<-14
+print("cooks")
+COOKS<-cooks.distance(model_picked.interaction1)
+length(COOKS[COOKS>qf(0.5,p,n-p)])
 
-# Delta G squared
-1-pchisq(model_reduced$deviance-model_picked.interaction1$deviance, 3)
+print("DFFITS")
+DFFITS<-dffits(model_picked.interaction1)
+length(DFFITS[abs(DFFITS)>2*sqrt(p/n)])
 
+print('DFBETAS')
+DFBETAS<-dfbetas(model_picked.interaction1)
+length(DFBETAS[abs(DFBETAS)>2/sqrt(n)])
 
-# New_dvcat & abcat
-model_reduced <- glm(formula = dead_num ~ New_dvcat + abcat, family = "binomial", data = nass, maxit = 100)
-model_picked.interaction2 <- glm(formula = dead_num ~ New_dvcat*abcat, family = "binomial", data = nass, maxit = 100)
-summary(model_picked.interaction2)
+par(mfrow=c(1,2))
+dffits.ep <- dffits(model_picked.interaction1)
+plot(seq(1, length(dffits.ep), 1),dffits.ep,type="l", main="DFFITS Plot",
+       xlab="Index", ylab="Dffits")
+abline(h=2*sqrt(p/n), col="red")
+abline(h=-2*sqrt(p/n), col="red")
 
+cook.ep <- cooks.distance(model_picked.interaction1)
+plot(seq(1, length(cook.ep), 1),cook.ep,type="l", main="Cook's Distance",
+       xlab="Index", ylab="Cook's Distance", ylim=c(0,1))
+abline(h=qf(0.5,p,n-p), col="red")
+```
+```{r}
+#remove outliers based on DFFITS values
+outliers <- nass[abs(DFFITS)>2*sqrt(p/n), ]
+table(outliers$dead_num)
 
-# Delta G squared
-1-pchisq(model_reduced$deviance-model_picked.interaction2$deviance, 6)
+outliers.removed<- nass[-c(abs(DFFITS)>2*sqrt(p/n)), ]
+table(outliers.removed$dead_num)
 ```
 
 
@@ -296,6 +318,18 @@ plot(thresholds,auc[1:100],type="b",ylab="AUC",main="AUC VS Threshold",col="blue
 points(thresholds[best],auc[best],pch=19,col="red")
 
 ```
+```{r}
+library(Epi)
+rc <- ROC(form = dead_num ~ New_dvcat + seatbelt + frontal + sex + 
+    ageOFocc + abcat + occRole + New_dvcat * seatbelt, data = testing, plot=c("sp", "ROC") )
+## optimal combination
+opt <- which.max(rowSums(rc$res[, c("sens", "spec")]))
+## optimal cut-off point 
+rc$res$lr.eta[opt]
+```
+
+
+
 
 
 
