@@ -246,7 +246,7 @@ Note: DFFITS, DFBETAS, and Cook's Distance yield significantly different results
 Split Data into Training & Test Set
 ```{r}
 #creating training and testing dataset
-set.seed(40)
+set.seed(50)
 sample<-sample.int(nrow(nass), floor(.50*nrow(nass)), replace = F)
 train<-nass[sample, ]
 test<-nass[-sample, ]
@@ -423,12 +423,12 @@ Total
 
 ```
 
-Net Effect  25-39+
+Net Effect  25-39
 ```{r}
 #Looking only at: seatbelt = none, a particular speed, change in intercept
 ##Note: assume everything else belongs to reference classes; also coefficient for age of occupant is unchanged
 
-#55+: w/ interaction terms
+#25-39: w/ interaction terms
 model_final.interaction1$coefficients["seatbeltnone"]
 model_final.interaction1$coefficients["New_dvcat25-39"]
 model_final.interaction1$coefficients["New_dvcat25-39:seatbeltnone"]
@@ -436,7 +436,7 @@ model_final.interaction1$coefficients["(Intercept)"]
 
 Total_Int25 <- model_final.interaction1$coefficients["New_dvcat25-39"] + model_final.interaction1$coefficients["seatbeltnone"]+ model_final.interaction1$coefficients["New_dvcat25-39:seatbeltnone"] + model_final.interaction1$coefficients["(Intercept)"]
 
-#55+: w/o interaction terms
+#25-39:: w/o interaction terms
 model_final$coefficients["seatbeltnone"]
 model_final$coefficients["New_dvcat25-39"]
 model_final$coefficients["(Intercept)"]
