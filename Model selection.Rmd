@@ -339,6 +339,24 @@ rc$res$lr.eta[opt]
 table(nass$dead_num)
 plot(nass$dead_num,main="Distribution of Dependent Variable")
 ```
+```{r} 
+# cross validation with changable threshold. 
+
+library(boot)
+#mycost <- function(r, pi = 0) mean(abs(r-pi) > 0.05) #threshold value
+
+ mycost <- function(r, pi){
+     weight1 = 1 #cost for getting 1 wrong
+     weight0 = 1 #cost for getting 0 wrong
+     c1 = (r==1)&(pi<0.05) #logical vector - true if actual 1 but predict 0
+     c0 = (r==0)&(pi>0.05) #logical vecotr - true if actual 0 but predict 1
+     return(mean(weight1*c1+weight0*c0))
+ }
+a <- cv.10 <- cv.glm(nass, model_picked.interaction1,cost = mycost, K=10)
+a$delta
+
+1-a$delta
+```
 
 
 
