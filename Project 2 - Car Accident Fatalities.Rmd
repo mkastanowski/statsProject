@@ -5,7 +5,10 @@ date: "11/26/2020"
 output: html_document
 ---
 
+#0. Process
+
 Our process included:
+
 1) Data Import & Cleaning
 2) Data Exploration
 3) Model Exploration (Full Data Set)
@@ -196,50 +199,6 @@ Note:
 - GVIF^(1/2*DF) - low values indicate that multicollinearity is not present
 - Delta G^2 - indicates that the model is useful (relative to the intercept only model)
 
-#### Outliers and Influential Data Points
-
-```{r}
-# Influential Points Check
-n<-nrow(nass)
-p<-9
-
-# Cook's Distance
-print("cooks")
-COOKS<-cooks.distance(model_picked)
-COOKS[COOKS>qf(0.5,p,n-p)]
-
-# DFFITS
-print("DFFITS")
-DFFITS<-dffits(model_picked)
-DFFITS[abs(DFFITS)>2*sqrt(p/n)]
-
-# DFBETAS
-print('DFBETAS')
-DFBETAS<-dfbetas(model_picked)
-DFBETAS[abs(DFBETAS)>2/sqrt(n)]
-
-# Plotting
-par(mfrow=c(1,2))
-
-dffits.ep <- dffits(model_picked)
-plot(seq(1, length(dffits.ep), 1),dffits.ep,type="l", main="DFFITS Plot",
-       xlab="Index", ylab="Dffits")
-abline(h=2*sqrt(p/n), col="red")
-abline(h=-2*sqrt(p/n), col="red")
-
-dfbetas.ep <- dfbetas(model_picked)
-plot(seq(1, length(dfbetas.ep), 1),dfbetas.ep,type="l", main="DFBETAS Plot",
-       xlab="Index", ylab="DFBETAS")
-abline(h=2*sqrt(p/n), col="red")
-abline(h=-2*sqrt(p/n), col="red")
-
-cook.ep <- cooks.distance(model_picked)
-plot(seq(1, length(cook.ep), 1),cook.ep,type="l", main="Cook's Distance",
-       xlab="Index", ylab="Cook's Distance", ylim=c(0,1))
-abline(h=qf(0.5,p,n-p), col="red")
-```
-Note: DFFITS, DFBETAS, and Cook's Distance yield significantly different results.
-
 
 # 4. Model Selection, Formalization, and Validation (Test & Train Data Set)
 
@@ -290,7 +249,7 @@ Note: Consistent with results from model based on full data set, we can combine 
 
 
 #### Combine appropriate accident speeds 
-Combine dvcat 10-24 with reference class. Rename to "1-25"
+Combine dvcat 10-24 with reference class. Rename to "1-24"
 
 ```{r}
 
@@ -450,9 +409,10 @@ print("Model w/o Interacions")
 Total25
 
 ```
+Note: The overall effect of the interaction terms signifies that while seatbelts are always beneficial (save lives / lower probability of death), they are more beneficial at lower speeds. 
 
 
-### Outliers and Innfluential Data Points
+#### Outliers and Influential Data Points
 
 ```{r}
 # Influential Points Check
@@ -499,12 +459,15 @@ Note: DFFITS, DFBETAS, and Cook's Distance yield significantly different results
 Number of influential data points (as proportion of training data):
 ```{r}
 #Cooks
+print("Cook's Distance:")
 length(COOKS[COOKS>qf(0.5,p,n-p)])/nrow(train)
 
 #DFFITS
+print("DFFITS:")
 length(DFFITS[abs(DFFITS)>2*sqrt(p/n)])/nrow(train)
 
 #DFBETAS
+print("DFBETAS:")
 length(DFBETAS[abs(DFBETAS)>2/sqrt(n)])/nrow(train)
 
 ```
@@ -515,7 +478,7 @@ Note:
 - DFBETAS - 75.1%
 
 
-### Confusion Matrices
+#### Confusion Matrices
 
 ##### Confusion Matrices - Original Model (no interaction terms - for comparison)
 Explore Confusion Matrices for various values of lambda
@@ -546,6 +509,17 @@ table(test$dead_num, preds>0.5)
 
 Given use cases (first responders, insurance companies), are more concerned with correctly identifying deaths even at the cost of higher false positive rates, select lower value of lambda. However, we would like to select a cutoff value that balances false positives with sensitivity.
 
+##### Optimal Lambda Calculation (sensitivity vs. specification)
+```{r}
+library(Epi)
+rc <- ROC(form = dead_num ~ New_dvcat + seatbelt + frontal + sex + 
+    ageOFocc + abcat + occRole + New_dvcat * seatbelt, data = test, plot=c("sp", "ROC") )
+## optimal combination
+opt <- which.max(rowSums(rc$res[, c("sens", "spec")]))
+## optimal cut-off point 
+rc$res$lr.eta[opt]
+```
+Note: while the optimal value calculated for the current sample is 0.061, after taking numerous samples an optima value of 0.05 seems more typical (see subsequent code).
 
 ##### Confusion Matrices - Detailed
 After identifying lamda = .05 as roughly the cutoff that struck the optimal balance, we drilled in with greater detail:
@@ -557,6 +531,7 @@ table(test$dead_num, preds>0.06)
 table(test$dead_num, preds>0.07)
 ```
 After evaluating in greater detail, we decided to use lambda = 0.05 as our cutoff.
+
 
 
 
@@ -644,7 +619,89 @@ GVIF^(1/2*DF) - low values for model without interaction terms indicate that mul
 
 Delta G^2 - indicates that the model is useful (relative to the intercept only model)
 
+#### K- Fold Cross Validation
+10 Fold Cross Validation for lambda = 0.05
+```{r}
+# Cross Validation with changeable threshold. 
 
+model_picked.interaction1 <- glm(formula = dead_num ~ New_dvcat + seatbelt + frontal + sex + ageOFocc + 
+    abcat + occRole + New_dvcat*seatbelt, family = "binomial", data = nass, maxit = 100)
+
+mycost <- function(r, pi){
+     weight1 = 1 #cost for getting 1 wrong
+     weight0 = 1 #cost for getting 0 wrong
+     c1 = (r==1)&(pi<0.05) #logical vector - true if actual 1 but predict 0
+     c0 = (r==0)&(pi>=0.05) #logical vector - true if actual 0 but predict 1
+     return(mean(weight1*c1+weight0*c0))
+ }
+a <- cv.10 <- cv.glm(nass, model_picked.interaction1,cost = mycost, K=10)
+
+a$delta[1] #Overall Error Rate
+1-a$delta[1] #Accuracy
+```
+Note: Overall Error Rate is consistent with that observed in our model (0.1889686)
+
+
+#### Test Refit of Data
+Check for consistency in sampling
+
+- Resample
+- Calculate key statistics (AUC, Optimal Cutoff, Residual Deviance, Intercept - as an arbitrary coefficient)
+- Repeat multiple times
+
+
+```{r}
+tbl <- data.frame(c(0,0,0,0))
+
+for (i in 1:20) {
+  
+  #creating training and testing dataset
+  #No set seed used
+  Rsample<-sample.int(nrow(nass), floor(.50*nrow(nass)), replace = F)
+  Rtrain<-nass[Rsample, ]
+  Rtest<-nass[-Rsample, ]
+  
+  #Fit Model
+  model_final.R <- glm(formula = dead_num ~ New_dvcat + seatbelt + frontal + sex + ageOFocc + 
+      abcat + occRole + New_dvcat*seatbelt, family = "binomial", data = Rtrain, maxit = 100)
+  
+  ## Confusion Matrices - Original Model (for comparison)
+  Rpreds<-predict(model_final.R,newdata=Rtest, type="response")
+  table(Rtest$dead_num, Rpreds>0.05)
+  
+  #ROC
+  Rrates<-prediction(Rpreds, Rtest$dead_num)
+  Rroc_result<-performance(Rrates,measure="tpr", x.measure="fpr")
+  
+  #compute the AUC
+  Raucvalues <- performance(Rrates, measure = "auc")
+  Rauc <- Raucvalues@y.values[[1]]
+  
+  #Compute Optimal Lambda
+  Rrc <- ROC(form = dead_num ~ New_dvcat + seatbelt + frontal + sex + 
+      ageOFocc + abcat + occRole + New_dvcat * seatbelt, data = Rtest)
+  
+  # optimal combination
+  Ropt <- which.max(rowSums(Rrc$res[, c("sens", "spec")]))
+  
+  
+  ### Output:
+  summary(model_final.R)
+  
+  # optimal cut-off point
+  Rrc$res$lr.eta[Ropt]
+  # AUC
+  Rauc
+  # Residual Deviance
+  model_final.R$deviance
+  
+  t <- c(Rauc, Rrc$res$lr.eta[Ropt], model_final.R$deviance, model_final.R$coefficients["(Intercept)"])
+  tbl[i] = t 
+}
+
+tbl
+```
+Note: In general, we observe consistency in a number of key metrics (AUC, optimal lambd calculation, deviance, and coefficients). Additionally the sample we chose to fit the model is not show significantly different results from others generally observed.
 
 # 5. Highlighting Unique Observations
 Additional Information and Facts/Highlights used in write-up
@@ -692,73 +749,6 @@ model_age$deviance
 ```
 
 
-```{r}
-library(Epi)
-rc <- ROC(form = dead_num ~ New_dvcat + seatbelt + frontal + sex + 
-    ageOFocc + abcat + occRole + New_dvcat * seatbelt, data = test, plot=c("sp", "ROC") )
-## optimal combination
-opt <- which.max(rowSums(rc$res[, c("sens", "spec")]))
-## optimal cut-off point 
-rc$res$lr.eta[opt]
-```
 
 
-# Test Refit of Data
-
-- Resample
-- Calculate key statistics (AUC, Optimal Cutoff, Residual Deviance, Intercept)
-- Repeat multiple times
-
-Check for consistency
-```{r}
-tbl <- data.frame(c(0,0,0,0))
-
-for (i in 1:20) {
-  
-  #creating training and testing dataset
-  #No set seed used
-  Rsample<-sample.int(nrow(nass), floor(.50*nrow(nass)), replace = F)
-  Rtrain<-nass[Rsample, ]
-  Rtest<-nass[-Rsample, ]
-  
-  #Fit Model
-  model_final.R <- glm(formula = dead_num ~ New_dvcat + seatbelt + frontal + sex + ageOFocc + 
-      abcat + occRole + New_dvcat*seatbelt, family = "binomial", data = Rtrain, maxit = 100)
-  
-  ## Confusion Matrices - Original Model (for comparison)
-  Rpreds<-predict(model_final.R,newdata=Rtest, type="response")
-  table(Rtest$dead_num, preds.R>0.05)
-  
-  #ROC
-  Rrates<-prediction(Rpreds, Rtest$dead_num)
-  Rroc_result<-performance(Rrates,measure="tpr", x.measure="fpr")
-  
-  #compute the AUC
-  Raucvalues <- performance(Rrates, measure = "auc")
-  Rauc <- Raucvalues@y.values[[1]]
-  
-  #Compute Optimal Lambda
-  Rrc <- ROC(form = dead_num ~ New_dvcat + seatbelt + frontal + sex + 
-      ageOFocc + abcat + occRole + New_dvcat * seatbelt, data = Rtest)
-  
-  # optimal combination
-  Ropt <- which.max(rowSums(Rrc$res[, c("sens", "spec")]))
-  
-  
-  ### Output:
-  summary(model_final.R)
-  
-  # optimal cut-off point
-  Rrc$res$lr.eta[Ropt]
-  # AUC
-  Rauc
-  # Residual Deviance
-  model_final.R$deviance
-  
-  t <- c(Rauc, Rrc$res$lr.eta[Ropt], model_final.R$deviance, model_final.R$coefficients["(Intercept)"])
-  tbl[i] = t 
-}
-
-tbl
-```
 
