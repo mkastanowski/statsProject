@@ -91,11 +91,36 @@ head(nass, 5)
 
 
 # 2. Exploratory Data Analysis
-[ADD CODE / ANALYSIS HERE]
-**************************
-**************************
-**************************
-[ADD CODE / ANALYSIS HERE]
+
+### Exploratory Data Analysis - Understanding Data & Predictors
+
+Deaths vs. Predictors
+```{r}
+#Explore predictors we think will be significant
+round(prop.table(table(nass$dead_num, nass$dvcat)),3) #proportion table of deaths versus estimated speed of crash
+round(prop.table(table(nass$dead_num, nass$seatbelt)),3) #proportion table of deaths versus buckled
+round(prop.table(table(nass$dead_num, nass$airbag)),3) #proportion table of deaths versus airbag availability
+round(prop.table(table(nass$dead_num, nass$frontal)),3) #proportion table of deaths versus buckled
+round(prop.table(table(nass$dead_num, nass$abcat)),3) #proportion table of deaths versus buckled
+
+boxplot(ageOFocc ~ dead_num, data = nass) #boxplot of age of occupant versus death
+
+```
+
+### Exploratory Data Analysis - Influential Data Points
+
+[***** ADD MICHAEL WORK *********]
+
+Note: As outlined subsequently, traditional measures of influence and leverage are difficult to apply to our data set given the number of categorical variables. We look for potential influential data points by seeking to identify combinations of classes with few observations.
+
+```{r}
+table(nass$seatbelt, nass$dvcat)
+table(nass$abcat, nass$dvcat)
+table(nass$frontal, nass$dvcat)
+table(nass$sex, nass$dvcat)
+table(nass$occRole, nass$dvcat)
+```
+
 
 
 # 3. Model Exploration (Full Data Set)
@@ -477,6 +502,10 @@ Note:
 - DFFITS - 9.7%
 - DFBETAS - 75.1%
 
+We expect that the significant differences arose from the fact that we were fitting a logistic regression model with numerous categorical variables using a fairly unbalanced set of observations. 
+
+Additional emphasis was placed on our exploratory data analysis (referenced above) to identify potential influential observations.
+
 
 #### Confusion Matrices
 
@@ -531,7 +560,6 @@ table(test$dead_num, preds>0.06)
 table(test$dead_num, preds>0.07)
 ```
 After evaluating in greater detail, we decided to use lambda = 0.05 as our cutoff.
-
 
 
 
@@ -642,6 +670,35 @@ a$delta[1] #Overall Error Rate
 Note: Overall Error Rate is consistent with that observed in our model (0.1889686)
 
 
+#### Iterating Test/Train Split
+
+```{r}
+#Running for loop of train test split
+
+#run the train test split 10 times and make 10 different confusion matrices 
+#this is to ensure the train test split does not influence the confusion matrices that much
+for(i in 1:10) {
+  #make train and test
+  sample<-sample.int(nrow(nass), floor(.50*nrow(nass)), replace = F)
+  train<-nass[sample, ]
+  test<-nass[-sample, ]
+  
+  
+  #selected final model
+  model_rep.interaction1 <- glm(formula = dead_num ~ New_dvcat + seatbelt + frontal + sex + ageOFocc + 
+                                    abcat + occRole + New_dvcat*seatbelt, family = "binomial", data = train, maxit = 100)
+  
+  
+  preds<-predict(model_rep.interaction1,newdata=test, type="response")
+  
+  print(table(test$dead_num, preds>0.05))}
+#Number of false positives ranges from 104 to 128,
+# the variability is not that great in confusion matrices based on random test splits
+
+```
+
+
+
 #### Test Refit of Data
 Check for consistency in sampling
 
@@ -702,6 +759,7 @@ for (i in 1:20) {
 tbl
 ```
 Note: In general, we observe consistency in a number of key metrics (AUC, optimal lambd calculation, deviance, and coefficients). Additionally the sample we chose to fit the model is not show significantly different results from others generally observed.
+
 
 # 5. Highlighting Unique Observations
 Additional Information and Facts/Highlights used in write-up
