@@ -26,6 +26,7 @@ library(leaps) #For All Regression
 library(caret)  #Used for cross validation
 library(boot)  #Used for cross validation
 library(jtools) #Model Comparison Table
+library(tidyverse)
 ```
 
 # 1. Data Import &Cleaning
@@ -109,17 +110,57 @@ boxplot(ageOFocc ~ dead_num, data = nass) #boxplot of age of occupant versus dea
 
 ### Exploratory Data Analysis - Influential Data Points
 
-[***** ADD MICHAEL WORK *********]
 
-Note: As outlined subsequently, traditional measures of influence and leverage are difficult to apply to our data set given the number of categorical variables. We look for potential influential data points by seeking to identify combinations of classes with few observations.
+Each Column Individually
+```{r}
+print("EACH COLUMN INDIVIDUALLY")
+sapply(nass, table)
+```
+
+Columns Against Each Other
+```{r}
+print("dvcat")
+mapply(table, nass[,-1], nass[1], USE.NAMES = TRUE, SIMPLIFY = FALSE) #dvcat
+```
 
 ```{r}
-table(nass$seatbelt, nass$dvcat)
-table(nass$abcat, nass$dvcat)
-table(nass$frontal, nass$dvcat)
-table(nass$sex, nass$dvcat)
-table(nass$occRole, nass$dvcat)
+print("New_dvcat")
+mapply(table, nass[,-13], nass[13], USE.NAMES = TRUE, SIMPLIFY = FALSE) #New_dvcat
 ```
+
+```{r}
+print("Seatbelt")
+mapply(table, nass[,-3], nass[3], USE.NAMES = TRUE, SIMPLIFY = FALSE) #seatbelt
+```
+
+```{r}
+print("Frontal")
+mapply(table, nass[,-4], nass[4], USE.NAMES = TRUE, SIMPLIFY = FALSE) #frontal
+```
+
+```{r}
+print("sex")
+mapply(table, nass[,-5], nass[5], USE.NAMES = TRUE, SIMPLIFY = FALSE) #sex
+```
+
+```{r}
+print("ageOFocc")
+mapply(table, nass[,-6], nass[6], USE.NAMES = TRUE, SIMPLIFY = FALSE) #ageOFocc
+```
+
+```{r}
+print("abcat")
+mapply(table, nass[,-9], nass[9], USE.NAMES = TRUE, SIMPLIFY = FALSE) #abcat
+```
+
+```{r}
+print("occRole")
+mapply(table, nass[,-10], nass[10], USE.NAMES = TRUE, SIMPLIFY = FALSE) #occRole
+```
+
+
+
+Note: As outlined subsequently, traditional measures of influence and leverage are difficult to apply to our data set given the number of categorical variables. We look for potential influential data points by seeking to identify combinations of classes with few observations.
 
 
 
@@ -808,5 +849,8 @@ model_age$deviance
 
 
 
+```{r}
+
+```
 
 
