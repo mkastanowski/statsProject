@@ -111,51 +111,55 @@ boxplot(ageOFocc ~ dead_num, data = nass) #boxplot of age of occupant versus dea
 ### Exploratory Data Analysis - Influential Data Points
 
 
-Each Column Individually
+Each Column Individually(only the columns in the final model)
 ```{r}
+nass2<-tibble(New_dvcat, seatbelt, frontal, sex, ageOFocc,abcat, occRole)
 print("EACH COLUMN INDIVIDUALLY")
 sapply(nass, table)
 ```
 
 Columns Against Each Other
-```{r}
-print("dvcat")
-mapply(table, nass[,-1], nass[1], USE.NAMES = TRUE, SIMPLIFY = FALSE) #dvcat
-```
 
 ```{r}
 print("New_dvcat")
-mapply(table, nass[,-13], nass[13], USE.NAMES = TRUE, SIMPLIFY = FALSE) #New_dvcat
+#mapply(table, nass[,-13], nass[13], USE.NAMES = TRUE, SIMPLIFY = FALSE) #New_dvcat
+mapply(table, nass2[,-1], nass2[1], USE.NAMES = TRUE, SIMPLIFY = FALSE) 
 ```
 
 ```{r}
 print("Seatbelt")
-mapply(table, nass[,-3], nass[3], USE.NAMES = TRUE, SIMPLIFY = FALSE) #seatbelt
+#mapply(table, nass[,-3], nass[3], USE.NAMES = TRUE, SIMPLIFY = FALSE) #seatbelt
+mapply(table, nass2[,-2], nass2[2], USE.NAMES = TRUE, SIMPLIFY = FALSE) 
 ```
 
 ```{r}
 print("Frontal")
-mapply(table, nass[,-4], nass[4], USE.NAMES = TRUE, SIMPLIFY = FALSE) #frontal
+#mapply(table, nass[,-4], nass[4], USE.NAMES = TRUE, SIMPLIFY = FALSE) #frontal
+mapply(table, nass2[,-3], nass2[3], USE.NAMES = TRUE, SIMPLIFY = FALSE) 
 ```
 
 ```{r}
 print("sex")
-mapply(table, nass[,-5], nass[5], USE.NAMES = TRUE, SIMPLIFY = FALSE) #sex
+#mapply(table, nass[,-5], nass[5], USE.NAMES = TRUE, SIMPLIFY = FALSE) #sex
+mapply(table, nass2[,-4], nass2[4], USE.NAMES = TRUE, SIMPLIFY = FALSE) 
 ```
 
 ```{r}
 print("ageOFocc")
-mapply(table, nass[,-6], nass[6], USE.NAMES = TRUE, SIMPLIFY = FALSE) #ageOFocc
+#mapply(table, nass[,-6], nass[6], USE.NAMES = TRUE, SIMPLIFY = FALSE) #ageOFocc
+mapply(table, nass2[,-5], nass2[5], USE.NAMES = TRUE, SIMPLIFY = FALSE) 
 ```
 
 ```{r}
 print("abcat")
-mapply(table, nass[,-9], nass[9], USE.NAMES = TRUE, SIMPLIFY = FALSE) #abcat
+#mapply(table, nass[,-9], nass[9], USE.NAMES = TRUE, SIMPLIFY = FALSE) #abcat
+mapply(table, nass2[,-6], nass2[6], USE.NAMES = TRUE, SIMPLIFY = FALSE) 
 ```
 
 ```{r}
 print("occRole")
-mapply(table, nass[,-10], nass[10], USE.NAMES = TRUE, SIMPLIFY = FALSE) #occRole
+#mapply(table, nass[,-10], nass[10], USE.NAMES = TRUE, SIMPLIFY = FALSE) #occRole
+mapply(table, nass2[,-7], nass2[7], USE.NAMES = TRUE, SIMPLIFY = FALSE) 
 ```
 
 
