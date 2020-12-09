@@ -854,7 +854,16 @@ model_age$deviance
 
 
 ```{r}
+#Define new data set
+nassAge <- nass[nass$ageOFocc<80, ]
 
+#Fit
+model_80 <- glm(formula = dead_num ~ New_dvcat + seatbelt + frontal + sex + ageOFocc + 
+      abcat + occRole + New_dvcat*seatbelt, family = "binomial", data = nassAge, maxit = 100)
+
+#Compare to model fit to full data set
+summary(model_80)
+summary(model_picked.interaction1)
 ```
 
 
