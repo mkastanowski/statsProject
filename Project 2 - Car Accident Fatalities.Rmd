@@ -110,58 +110,42 @@ boxplot(ageOFocc ~ dead_num, data = nass) #boxplot of age of occupant versus dea
 
 ### Exploratory Data Analysis - Influential Data Points
 
-
-Each Column Individually(only the columns in the final model)
-```{r}
-nass2<-tibble(New_dvcat, seatbelt, frontal, sex, ageOFocc,abcat, occRole)
-print("EACH COLUMN INDIVIDUALLY")
-sapply(nass, table)
-```
-
 Columns Against Each Other
 
 ```{r}
 print("New_dvcat")
-#mapply(table, nass[,-13], nass[13], USE.NAMES = TRUE, SIMPLIFY = FALSE) #New_dvcat
-mapply(table, nass2[,-1], nass2[1], USE.NAMES = TRUE, SIMPLIFY = FALSE) 
+mapply(table, nass[,-13], nass[13], USE.NAMES = TRUE, SIMPLIFY = FALSE) #New_dvcat
 ```
 
 ```{r}
 print("Seatbelt")
-#mapply(table, nass[,-3], nass[3], USE.NAMES = TRUE, SIMPLIFY = FALSE) #seatbelt
-mapply(table, nass2[,-2], nass2[2], USE.NAMES = TRUE, SIMPLIFY = FALSE) 
+mapply(table, nass[,-3], nass[3], USE.NAMES = TRUE, SIMPLIFY = FALSE) #seatbelt
 ```
 
 ```{r}
 print("Frontal")
-#mapply(table, nass[,-4], nass[4], USE.NAMES = TRUE, SIMPLIFY = FALSE) #frontal
-mapply(table, nass2[,-3], nass2[3], USE.NAMES = TRUE, SIMPLIFY = FALSE) 
+mapply(table, nass[,-4], nass[4], USE.NAMES = TRUE, SIMPLIFY = FALSE) #frontal
 ```
 
 ```{r}
 print("sex")
-#mapply(table, nass[,-5], nass[5], USE.NAMES = TRUE, SIMPLIFY = FALSE) #sex
-mapply(table, nass2[,-4], nass2[4], USE.NAMES = TRUE, SIMPLIFY = FALSE) 
+mapply(table, nass[,-5], nass[5], USE.NAMES = TRUE, SIMPLIFY = FALSE) #sex
 ```
 
 ```{r}
 print("ageOFocc")
-#mapply(table, nass[,-6], nass[6], USE.NAMES = TRUE, SIMPLIFY = FALSE) #ageOFocc
-mapply(table, nass2[,-5], nass2[5], USE.NAMES = TRUE, SIMPLIFY = FALSE) 
+mapply(table, nass[,-6], nass[6], USE.NAMES = TRUE, SIMPLIFY = FALSE) #ageOFocc
 ```
 
 ```{r}
 print("abcat")
-#mapply(table, nass[,-9], nass[9], USE.NAMES = TRUE, SIMPLIFY = FALSE) #abcat
-mapply(table, nass2[,-6], nass2[6], USE.NAMES = TRUE, SIMPLIFY = FALSE) 
+mapply(table, nass[,-9], nass[9], USE.NAMES = TRUE, SIMPLIFY = FALSE) #abcat
 ```
 
 ```{r}
 print("occRole")
-#mapply(table, nass[,-10], nass[10], USE.NAMES = TRUE, SIMPLIFY = FALSE) #occRole
-mapply(table, nass2[,-7], nass2[7], USE.NAMES = TRUE, SIMPLIFY = FALSE) 
+mapply(table, nass[,-10], nass[10], USE.NAMES = TRUE, SIMPLIFY = FALSE) #occRole
 ```
-
 
 
 Note: As outlined subsequently, traditional measures of influence and leverage are difficult to apply to our data set given the number of categorical variables. We look for potential influential data points by seeking to identify combinations of classes with few observations.
@@ -552,6 +536,44 @@ We expect that the significant differences arose from the fact that we were fitt
 Additional emphasis was placed on our exploratory data analysis (referenced above) to identify potential influential observations.
 
 
+#### Influential Data Point Exploration
+Removed people of age >90 (50 observations), as they presented the possibility of being influential data points
+```{r}
+#Define new data set
+nassAge <- nass[nass$ageOFocc<90, ]
+
+#Fit
+model_90 <- glm(formula = dead_num ~ New_dvcat + seatbelt + frontal + sex + ageOFocc + 
+      abcat + occRole + New_dvcat*seatbelt, family = "binomial", data = nassAge, maxit = 100)
+
+#Compare to model fit to full data set
+summary(model_90)
+summary(model_picked.interaction1)
+
+#Calculate AUC for comparison
+set.seed(40)
+sample90<-sample.int(nrow(nassAge), floor(.50*nrow(nassAge)), replace = F)
+train90<-nass[sample, ]
+test90<-nass[-sample, ]
+
+model_90_test <- glm(formula = dead_num ~ New_dvcat + seatbelt + frontal + sex + ageOFocc + 
+      abcat + occRole + New_dvcat*seatbelt, family = "binomial", data = nassAge, maxit = 100)
+
+#Compute the AUC
+preds90<-predict(model_90_test,newdata=test90, type="response")
+rates90<-prediction(preds90, test90$dead_num)
+aucvalues90 <- performance(rates90, measure = "auc")
+auc90 <- aucvalues90@y.values[[1]]
+auc90
+
+```
+Note:
+
+- The coefficients changed only slightly
+- Resulting model was a slight improvement, with an AUC of 0.8904 relative to our prior value of 0.8884
+- Decided to retain our original model due to the relatively modest improvement.
+
+
 #### Confusion Matrices
 
 ##### Confusion Matrices - Original Model (no interaction terms - for comparison)
@@ -849,21 +871,6 @@ model_frontal$deviance
 model_abcat$deviance
 model_age$deviance
 
-```
-
-
-
-```{r}
-#Define new data set
-nassAge <- nass[nass$ageOFocc<80, ]
-
-#Fit
-model_80 <- glm(formula = dead_num ~ New_dvcat + seatbelt + frontal + sex + ageOFocc + 
-      abcat + occRole + New_dvcat*seatbelt, family = "binomial", data = nassAge, maxit = 100)
-
-#Compare to model fit to full data set
-summary(model_80)
-summary(model_picked.interaction1)
 ```
 
 
